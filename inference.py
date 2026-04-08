@@ -109,8 +109,7 @@ Do not include any text outside the JSON object."""
 # ---------------------------------------------------------------------------
 
 def log_start(task: str, env: str, model: str) -> None:
-    payload = json.dumps({"task": task, "env": env, "model": model})
-    print(f"[START] {payload}", flush=True)
+    print(f"[START] task={task} env={env} model={model}", flush=True)
 
 
 def log_step(
@@ -120,14 +119,14 @@ def log_step(
     done: bool,
     error: Optional[str] = None,
 ) -> None:
-    payload = json.dumps({
-        "step": step,
-        "action": action,
-        "reward": reward,
-        "done": done,
-        "error": error,
-    })
-    print(f"[STEP] {payload}", flush=True)
+    # Compact action to a single line (no embedded newlines allowed)
+    action_oneline = action.replace("\n", " ").replace("\r", "").strip()
+    done_str = "true" if done else "false"
+    error_str = error if error else "null"
+    print(
+        f"[STEP] step={step} action={action_oneline} reward={reward:.2f} done={done_str} error={error_str}",
+        flush=True,
+    )
 
 
 def log_end(
@@ -136,13 +135,9 @@ def log_end(
     score: float,
     rewards: List[float],
 ) -> None:
-    payload = json.dumps({
-        "success": success,
-        "steps": steps,
-        "score": score,
-        "rewards": rewards,
-    })
-    print(f"[END] {payload}", flush=True)
+    success_str = "true" if success else "false"
+    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+    print(f"[END] success={success_str} steps={steps} score={score:.2f} rewards={rewards_str}", flush=True)
 
 
 # ---------------------------------------------------------------------------
