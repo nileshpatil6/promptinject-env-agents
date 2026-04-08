@@ -31,8 +31,8 @@ from openai import OpenAI
 # Auto-detect provider: HuggingFace takes priority if HF_TOKEN is set
 # ---------------------------------------------------------------------------
 
-HF_TOKEN: str = os.environ.get("HF_TOKEN") or ""          # no default — injected by HF Spaces
-LOCAL_IMAGE_NAME: str = os.environ.get("LOCAL_IMAGE_NAME") or ""  # optional: only if using from_docker_image()
+HF_TOKEN = os.environ.get("HF_TOKEN")                      # no default — injected by HF Spaces
+LOCAL_IMAGE_NAME = os.environ.get("LOCAL_IMAGE_NAME")      # optional: only if using from_docker_image()
 OPENAI_KEY: str = os.environ.get("API_KEY") or os.environ.get("OPENAI_API_KEY") or ""
 
 # HuggingFace Router — OpenAI-compatible, auto-selects fastest provider
