@@ -119,12 +119,20 @@ def log_step(
     done: bool,
     error: Optional[str] = None,
 ) -> None:
-    # Compact action to a single line (no embedded newlines allowed)
-    action_oneline = action.replace("\n", " ").replace("\r", "").strip()
+    # Build a compact space-free action token so validators that split on spaces work correctly
+    try:
+        data = json.loads(action)
+        cls = data.get("classification", "unknown")
+        atype = data.get("attack_type") or "null"
+        sev = data.get("severity")
+        sev_str = f"{sev:.2f}" if sev is not None else "null"
+        action_token = f"classification={cls},attack_type={atype},severity={sev_str}"
+    except Exception:
+        action_token = action.replace("\n", " ").replace("\r", "").replace(" ", "_").strip()
     done_str = "true" if done else "false"
     error_str = error if error else "null"
     print(
-        f"[STEP] step={step} action={action_oneline} reward={reward:.2f} done={done_str} error={error_str}",
+        f"[STEP] step={step} action={action_token} reward={reward:.2f} done={done_str} error={error_str}",
         flush=True,
     )
 
