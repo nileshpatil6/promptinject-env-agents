@@ -4,13 +4,16 @@ Baseline inference script for the Prompt Injection Detector OpenEnv environment.
 Runs an LLM agent against all 3 tasks and produces reproducible baseline scores.
 Logs strictly follow the [START] / [STEP] / [END] format required by the hackathon.
 
-Environment variables (required):
-  API_BASE_URL  - LLM API base URL (e.g. https://api.openai.com/v1)
-  MODEL_NAME    - Model identifier (e.g. gpt-4o-mini)
-  API_KEY       - API key (also checked as OPENAI_API_KEY / HF_TOKEN)
+Auto-detects HuggingFace vs OpenAI based on available environment variables.
+On HuggingFace Spaces, HF_TOKEN is injected automatically — no setup needed.
 
-Usage:
-  API_BASE_URL=https://api.openai.com/v1 MODEL_NAME=gpt-4o-mini API_KEY=sk-... python inference.py
+Environment variables:
+  HF_TOKEN      - HuggingFace token (auto-injected on HF Spaces) → uses HF inference API
+  API_KEY       - OpenAI API key → uses OpenAI API
+  OPENAI_API_KEY - Same as API_KEY
+  API_BASE_URL  - Override LLM endpoint (optional)
+  MODEL_NAME    - Override model name (optional)
+  ENV_BASE_URL  - Override environment server URL (optional, default: localhost:7860)
 """
 
 from __future__ import annotations
@@ -25,17 +28,49 @@ import httpx
 from openai import OpenAI
 
 # ---------------------------------------------------------------------------
-# Configuration
+# Auto-detect provider: HuggingFace takes priority if HF_TOKEN is set
 # ---------------------------------------------------------------------------
 
-API_BASE_URL: str = os.environ.get("API_BASE_URL", "https://api.openai.com/v1")
-MODEL_NAME: str = os.environ.get("MODEL_NAME", "gpt-4o-mini")
-API_KEY: str = (
-    os.environ.get("API_KEY")
-    or os.environ.get("OPENAI_API_KEY")
-    or os.environ.get("HF_TOKEN")
-    or "no-key"
-)
+HF_TOKEN: str = os.environ.get("HF_TOKEN", "")
+OPENAI_KEY: str = os.environ.get("API_KEY") or os.environ.get("OPENAI_API_KEY") or ""
+
+# HuggingFace Router — OpenAI-compatible, auto-selects fastest provider
+# Append :fastest (throughput), :cheapest (cost), or :preferred (your settings)
+HF_BASE_URL = "https://router.huggingface.co/v1"
+HF_DEFAULT_MODEL = "meta-llama/Llama-3.3-70B-Instruct:fastest"
+
+# OpenAI defaults
+OPENAI_BASE_URL = "https://api.openai.com/v1"
+OPENAI_DEFAULT_MODEL = "gpt-4o-mini"
+
+# Resolve: prefer HF_TOKEN if set (works automatically on HF Spaces)
+if HF_TOKEN:
+    _default_base = HF_BASE_URL
+    _default_model = HF_DEFAULT_MODEL
+    _default_key = HF_TOKEN
+    _provider = "HuggingFace"
+elif OPENAI_KEY:
+    _default_base = OPENAI_BASE_URL
+    _default_model = OPENAI_DEFAULT_MODEL
+    _default_key = OPENAI_KEY
+    _provider = "OpenAI"
+else:
+    _default_base = HF_BASE_URL
+    _default_model = HF_DEFAULT_MODEL
+    _default_key = "no-key"
+    _provider = "unknown"
+
+API_BASE_URL: str = os.environ.get("API_BASE_URL", _default_base)
+MODEL_NAME: str   = os.environ.get("MODEL_NAME", _default_model)
+
+# Resolve API key based on the final base URL — never send HF token to OpenAI or vice versa
+_is_hf_endpoint = "huggingface.co" in API_BASE_URL
+if _is_hf_endpoint:
+    API_KEY = HF_TOKEN or OPENAI_KEY or "no-key"
+    _provider = "HuggingFace"
+else:
+    API_KEY = OPENAI_KEY or HF_TOKEN or "no-key"
+    _provider = "OpenAI"
 
 ENV_BASE_URL: str = os.environ.get("ENV_BASE_URL", "http://localhost:7860")
 
@@ -276,7 +311,8 @@ def run_task(
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    print(f"[DEBUG] Starting inference. ENV_BASE_URL={ENV_BASE_URL} MODEL={MODEL_NAME}", flush=True)
+    print(f"[DEBUG] Provider={_provider} MODEL={MODEL_NAME} API_BASE={API_BASE_URL}", flush=True)
+    print(f"[DEBUG] ENV_BASE_URL={ENV_BASE_URL}", flush=True)
 
     client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
 
