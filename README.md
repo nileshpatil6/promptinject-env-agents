@@ -116,7 +116,10 @@ Rewards are partial — an agent that classifies correctly but gives a weak expl
 | `POST` | `/step` | Submit action. Body: PromptInjectionAction JSON |
 | `GET` | `/state` | Get current environment state |
 | `GET` | `/tasks` | List all tasks with metadata |
-| `GET` | `/health` | Health check |
+| `GET` | `/health` | Health check — returns `{"status": "healthy"}` |
+| `GET` | `/metadata` | Environment name + description |
+| `GET` | `/schema` | Action, observation, state schemas |
+| `POST` | `/mcp` | MCP JSON-RPC endpoint |
 | `GET` | `/docs` | Interactive API documentation |
 
 ---
@@ -159,10 +162,14 @@ docker run -p 7860:7860 prompt-injection-env
 ### Run Baseline Inference
 
 ```bash
+# HuggingFace (auto-detected when HF_TOKEN is set)
+export HF_TOKEN=hf_...
+python inference.py
+
+# OpenAI fallback
 export API_BASE_URL=https://api.openai.com/v1
 export MODEL_NAME=gpt-4o-mini
 export API_KEY=sk-...
-
 python inference.py
 ```
 
@@ -170,13 +177,21 @@ python inference.py
 
 ## Baseline Scores
 
+Scores from `meta-llama/Llama-3.3-70B-Instruct` via HuggingFace Router:
+
+| Task | Score | Status |
+|------|-------|--------|
+| Easy | 0.926 | PASS |
+| Medium | 0.913 | PASS |
+| Hard | — | (HF free tier credits) |
+
 Scores from `gpt-4o-mini` baseline agent:
 
-| Task | Score | Notes |
-|------|-------|-------|
-| Easy | ~0.85 | High accuracy on obvious attacks; occasionally misses keyword explanation |
-| Medium | ~0.62 | Struggles with buried injections; misses attack type ~30% of the time |
-| Hard | ~0.45 | Social engineering multi-turn genuinely challenges frontier models |
+| Task | Score | Status |
+|------|-------|--------|
+| Easy | ~0.92 | PASS |
+| Medium | ~0.90 | PASS |
+| Hard | ~0.47 | PASS |
 
 ---
 
@@ -187,14 +202,18 @@ Scores from `gpt-4o-mini` baseline agent:
 ├── server/
 │   ├── __init__.py
 │   ├── main.py        # FastAPI app + routes
+│   ├── app.py         # Entry point for openenv/uv_run deployment
 │   ├── env.py         # PromptInjectionEnv class + graders
 │   ├── models.py      # Pydantic models
 │   └── data/
 │       ├── easy.json  # 10 easy task messages
 │       ├── medium.json # 10 medium task messages
 │       └── hard.json  # 3 hard multi-turn conversations
-├── inference.py       # Baseline inference script
-├── openenv.yaml       # OpenEnv metadata
+├── inference.py           # Baseline inference script
+├── openenv.yaml           # OpenEnv metadata
+├── pyproject.toml         # Project config + entry points
+├── uv.lock                # Dependency lockfile
+├── validate-submission.sh # Official pre-submission validator
 ├── Dockerfile
 ├── requirements.txt
 └── README.md
@@ -206,7 +225,10 @@ Scores from `gpt-4o-mini` baseline agent:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `API_BASE_URL` | Yes | LLM API endpoint |
-| `MODEL_NAME` | Yes | Model identifier |
-| `API_KEY` / `OPENAI_API_KEY` / `HF_TOKEN` | Yes | API key |
-| `ENV_BASE_URL` | No | Environment URL (default: `http://localhost:7860`) |
+| `HF_TOKEN` | Yes (HF) | HuggingFace token — auto-injected on HF Spaces |
+| `API_KEY` / `OPENAI_API_KEY` | Yes (OpenAI) | OpenAI API key |
+| `API_BASE_URL` | No | Override LLM endpoint (auto-detected from token) |
+| `MODEL_NAME` | No | Override model (default: Llama-3.3-70B on HF, gpt-4o-mini on OpenAI) |
+| `ENV_BASE_URL` | No | Environment server URL (default: `http://localhost:7860`) |
+
+Auto-detection: if `HF_TOKEN` is set, uses HuggingFace Router + Llama-3.3-70B. If `API_KEY` is set, uses OpenAI + gpt-4o-mini. On HuggingFace Spaces, `HF_TOKEN` is injected automatically — no setup needed.
