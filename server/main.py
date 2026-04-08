@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import os
 from typing import List
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from .env import PromptInjectionEnv
 from .models import (
@@ -13,6 +16,8 @@ from .models import (
     StepResult,
     TaskInfo,
 )
+
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
 app = FastAPI(
     title="Prompt Injection Detector — OpenEnv",
@@ -98,16 +103,6 @@ def get_task(task_id: str) -> TaskInfo:
 
 
 @app.get("/")
-def root() -> dict:
-    return {
-        "name": "Prompt Injection Detector",
-        "description": "OpenEnv environment for AI safety: detect prompt injection attacks",
-        "tasks": ["easy", "medium", "hard"],
-        "endpoints": {
-            "reset": "POST /reset",
-            "step": "POST /step",
-            "state": "GET /state",
-            "tasks": "GET /tasks",
-            "docs": "GET /docs",
-        },
-    }
+def root() -> FileResponse:
+    """Serve the interactive UI dashboard."""
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"))

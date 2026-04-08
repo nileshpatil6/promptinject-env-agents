@@ -1,3 +1,19 @@
+---
+title: Prompt Injection Detector
+emoji: 🛡️
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+tags:
+  - openenv
+  - ai-safety
+  - prompt-injection
+  - security
+  - nlp
+---
+
 # Prompt Injection Detector — OpenEnv Environment
 
 A real-world AI safety environment where agents learn to detect **prompt injection attacks**.

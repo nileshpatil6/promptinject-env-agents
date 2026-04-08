@@ -1,0 +1,1319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Prompt Injection Detector — OpenEnv</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --paper:     #f7f4ef;
+  --paper-2:   #f0ece4;
+  --paper-3:   #e8e2d9;
+  --ink:       #1a1f2e;
+  --ink-2:     #3d4457;
+  --ink-3:     #7a8099;
+  --ink-4:     #a8afc4;
+  --rule:      #d8d2c7;
+  --rule-2:    #c8c1b4;
+  --oxford:    #002147;
+  --oxford-lt: #003370;
+  --red:       #8b1a1a;
+  --green:     #1a5c2e;
+  --amber:     #7a4f00;
+  --red-bg:    #fdf0f0;
+  --green-bg:  #f0f7f2;
+  --amber-bg:  #fdf7ed;
+  --serif:     'Instrument Serif', Georgia, serif;
+  --mono:      'DM Mono', 'Courier New', monospace;
+  --sans:      'DM Sans', system-ui, sans-serif;
+  --shadow-sm: 0 1px 3px rgba(26,31,46,0.06), 0 1px 2px rgba(26,31,46,0.04);
+  --shadow:    0 4px 12px rgba(26,31,46,0.08), 0 2px 4px rgba(26,31,46,0.04);
+}
+
+html, body { height: 100%; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.5;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ─── Header ─────────────────────────────────────────── */
+header {
+  background: var(--oxford);
+  color: #e8e4dc;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 28px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+header::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #c8a96e 0%, #e8c98e 40%, #c8a96e 100%);
+}
+
+.logo {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.logo-title {
+  font-family: var(--serif);
+  font-size: 19px;
+  color: #f0ece4;
+  letter-spacing: 0.01em;
+}
+
+.logo-sub {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: #9aa4b8;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-left: 1px solid #3a4458;
+  padding-left: 10px;
+  margin-left: 2px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.env-badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: #c8a96e;
+  border: 1px solid #3a4458;
+  padding: 3px 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.info-btn {
+  background: transparent;
+  border: 1px solid #3a4458;
+  color: #9aa4b8;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.02em;
+}
+.info-btn:hover { border-color: #c8a96e; color: #c8a96e; }
+
+/* ─── Layout ──────────────────────────────────────────── */
+.layout {
+  display: grid;
+  grid-template-columns: 256px 1fr 296px;
+  overflow: hidden;
+  height: 100%;
+}
+
+/* ─── Sidebar ─────────────────────────────────────────── */
+.sidebar {
+  background: #fff;
+  border-right: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.sidebar-section {
+  padding: 20px 20px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.section-head {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.section-head::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--rule);
+}
+
+/* Task selector */
+.task-list { display: flex; flex-direction: column; gap: 4px; }
+
+.task-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-2);
+  transition: all 0.12s;
+  text-align: left;
+}
+.task-btn:hover { background: var(--paper-2); border-color: var(--rule-2); color: var(--ink); }
+.task-btn.active {
+  background: var(--oxford);
+  border-color: var(--oxford);
+  color: #f0ece4;
+}
+.task-btn.active .task-pill { background: rgba(255,255,255,0.15); color: #f0ece4; }
+
+.task-pill {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  font-weight: 400;
+}
+.task-btn.easy:not(.active) .task-pill { background: var(--green-bg); color: var(--green); }
+.task-btn.medium:not(.active) .task-pill { background: var(--amber-bg); color: var(--amber); }
+.task-btn.hard:not(.active) .task-pill { background: var(--red-bg); color: var(--red); }
+
+/* Stat grid */
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+.stat-card {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  padding: 10px 12px;
+}
+.stat-num {
+  font-family: var(--serif);
+  font-size: 26px;
+  color: var(--ink);
+  line-height: 1;
+  margin-bottom: 3px;
+}
+.stat-lbl {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* Progress */
+.prog-track {
+  height: 3px;
+  background: var(--paper-3);
+  border-radius: 0;
+  overflow: hidden;
+  margin-top: 10px;
+}
+.prog-fill {
+  height: 100%;
+  background: var(--oxford);
+  transition: width 0.4s ease;
+  width: 0%;
+}
+.prog-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+}
+
+/* Score bar */
+.score-track {
+  height: 5px;
+  background: var(--paper-3);
+  overflow: hidden;
+  margin-top: 10px;
+}
+.score-fill {
+  height: 100%;
+  background: var(--green);
+  transition: width 0.5s ease, background 0.3s;
+  width: 0%;
+}
+.score-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+}
+
+/* History */
+.hist-list { display: flex; flex-direction: column; gap: 3px; max-height: 200px; overflow-y: auto; }
+.hist-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 8px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+.hist-step { color: var(--ink-3); }
+.hist-inj  { color: var(--red); }
+.hist-ben  { color: var(--green); }
+.hist-r-hi { color: var(--green); font-weight: 500; }
+.hist-r-md { color: var(--amber); font-weight: 500; }
+.hist-r-lo { color: var(--red); font-weight: 500; }
+.hist-empty { font-family: var(--mono); font-size: 10px; color: var(--ink-4); text-align: center; padding: 8px 0; }
+
+/* ─── Center ──────────────────────────────────────────── */
+.center {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--paper);
+}
+
+.obs-pane {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--rule);
+  background: #fff;
+}
+
+.obs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 24px 0;
+}
+
+.obs-title {
+  font-family: var(--serif);
+  font-size: 17px;
+  color: var(--ink);
+  font-style: italic;
+}
+
+.step-chip {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  padding: 3px 9px;
+  letter-spacing: 0.08em;
+}
+
+.empty-state {
+  padding: 40px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-4);
+}
+.empty-glyph {
+  font-family: var(--serif);
+  font-size: 36px;
+  font-style: italic;
+  color: var(--rule-2);
+  margin-bottom: 4px;
+}
+.empty-txt { font-family: var(--sans); font-size: 13px; color: var(--ink-3); }
+.empty-sub { font-family: var(--mono); font-size: 10px; color: var(--ink-4); letter-spacing: 0.08em; }
+
+.context-pane { padding: 14px 24px 0; display: none; }
+.context-lbl {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 8px;
+}
+.context-scroll { max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; }
+.ctx-turn {
+  padding: 7px 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ink-3);
+  border-left: 2px solid var(--rule-2);
+}
+.ctx-turn.usr {
+  color: var(--ink-2);
+  border-left-color: var(--oxford);
+  background: #f8f9fc;
+}
+
+.msg-pane { padding: 12px 24px 16px; }
+.msg-lbl {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 8px;
+}
+.msg-box {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--oxford);
+  padding: 14px 16px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 160px;
+  overflow-y: auto;
+  transition: border-left-color 0.2s;
+}
+
+/* Done state */
+.done-card {
+  display: none;
+  margin: 20px 24px;
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-top: 3px solid var(--oxford);
+  padding: 24px;
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+}
+.done-card.show { display: block; }
+.done-score-num {
+  font-family: var(--serif);
+  font-size: 56px;
+  color: var(--oxford);
+  line-height: 1;
+  margin-bottom: 6px;
+}
+.done-score-lbl {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.done-hint { font-size: 12px; color: var(--ink-3); margin-top: 12px; font-family: var(--sans); }
+
+/* Form */
+.form-pane {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field-lbl {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* Radio cards */
+.radio-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.radio-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  background: #fff;
+  border: 1px solid var(--rule);
+  cursor: pointer;
+  transition: all 0.12s;
+  position: relative;
+}
+.radio-card input { position: absolute; opacity: 0; pointer-events: none; }
+.radio-card:hover { border-color: var(--rule-2); background: var(--paper); }
+.radio-card.sel-inj {
+  border-color: var(--red);
+  background: var(--red-bg);
+}
+.radio-card.sel-ben {
+  border-color: var(--green);
+  background: var(--green-bg);
+}
+.radio-dot {
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  border: 1.5px solid var(--rule-2);
+  flex-shrink: 0;
+  transition: all 0.12s;
+  position: relative;
+}
+.radio-dot::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  background: transparent;
+  transition: background 0.12s;
+}
+.sel-inj .radio-dot { border-color: var(--red); }
+.sel-inj .radio-dot::after { background: var(--red); }
+.sel-ben .radio-dot { border-color: var(--green); }
+.sel-ben .radio-dot::after { background: var(--green); }
+.radio-txt {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+.sel-inj .radio-txt { color: var(--red); }
+.sel-ben .radio-txt { color: var(--green); }
+
+/* Select */
+select {
+  appearance: none;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237a8099' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center;
+  border: 1px solid var(--rule);
+  color: var(--ink-2);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 9px 32px 9px 12px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.12s;
+}
+select:focus { border-color: var(--oxford); }
+
+/* Textarea */
+textarea {
+  background: #fff;
+  border: 1px solid var(--rule);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.65;
+  padding: 10px 12px;
+  resize: vertical;
+  min-height: 80px;
+  outline: none;
+  transition: border-color 0.12s;
+}
+textarea:focus { border-color: var(--oxford); }
+textarea::placeholder { color: var(--ink-4); }
+
+/* Severity */
+.sev-row { display: flex; align-items: center; gap: 10px; }
+input[type="range"] {
+  flex: 1;
+  appearance: none;
+  height: 3px;
+  background: var(--paper-3);
+  border-radius: 0;
+  outline: none;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--oxford);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px var(--oxford);
+  cursor: pointer;
+}
+.sev-val {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-2);
+  min-width: 34px;
+  text-align: right;
+}
+
+/* Submit */
+.submit-btn {
+  background: var(--oxford);
+  color: #f0ece4;
+  border: none;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 12px 20px;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition: all 0.12s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.submit-btn:hover:not(:disabled) { background: var(--oxford-lt); }
+.submit-btn:disabled { background: var(--ink-4); cursor: not-allowed; color: #fff; }
+.submit-arrow { font-size: 14px; transition: transform 0.15s; }
+.submit-btn:hover:not(:disabled) .submit-arrow { transform: translateX(3px); }
+
+/* ─── Right panel ─────────────────────────────────────── */
+.right-panel {
+  background: #fff;
+  border-left: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.rp-section {
+  padding: 20px;
+  border-bottom: 1px solid var(--rule);
+}
+
+/* Reward display */
+.reward-main {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.reward-num {
+  font-family: var(--serif);
+  font-size: 52px;
+  line-height: 1;
+  color: var(--ink-3);
+  transition: color 0.3s;
+}
+.reward-num.hi { color: var(--green); }
+.reward-num.md { color: var(--amber); }
+.reward-num.lo { color: var(--red); }
+.reward-denom {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-bottom: 8px;
+}
+.reward-lbl {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 10px;
+  display: block;
+}
+
+.reward-bar {
+  height: 4px;
+  background: var(--paper-3);
+  overflow: hidden;
+}
+.reward-fill {
+  height: 100%;
+  transition: width 0.5s ease, background 0.3s;
+  width: 0%;
+}
+
+.verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+}
+.verdict.correct { background: var(--green-bg); border-color: var(--green); color: var(--green); }
+.verdict.wrong   { background: var(--red-bg); border-color: var(--red); color: var(--red); }
+.verdict-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+
+/* Breakdown */
+.breakdown-rows { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.bd-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.bd-key {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0.06em;
+}
+.bd-val {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.bd-bar {
+  width: 80px;
+  height: 2px;
+  background: var(--paper-3);
+  overflow: hidden;
+  margin: 0 10px;
+}
+.bd-bar-fill {
+  height: 100%;
+  background: var(--oxford);
+  transition: width 0.4s ease;
+}
+.bd-empty {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-4);
+  padding: 6px 0;
+}
+
+/* Weights */
+.wt-rows { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.wt-row { display: flex; justify-content: space-between; align-items: center; }
+.wt-key { font-family: var(--mono); font-size: 10px; color: var(--ink-3); }
+.wt-val { font-family: var(--mono); font-size: 10px; color: var(--oxford); font-weight: 500; }
+
+/* ─── Info overlay ────────────────────────────────────── */
+.overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(26,31,46,0.5);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+}
+.overlay.show { display: flex; }
+
+.info-panel {
+  background: #fff;
+  border-top: 4px solid var(--oxford);
+  max-width: 580px;
+  width: 92%;
+  max-height: 82vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow);
+}
+
+.info-head {
+  padding: 28px 32px 0;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 20px;
+}
+.info-title {
+  font-family: var(--serif);
+  font-size: 26px;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+.info-meta {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.info-body { padding: 24px 32px; }
+.info-section { margin-bottom: 22px; }
+.info-section-title {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--oxford);
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.info-section p, .info-section li {
+  font-family: var(--sans);
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--ink-2);
+  margin-bottom: 4px;
+}
+.info-section ul { padding-left: 16px; }
+.info-section strong { color: var(--ink); font-weight: 600; }
+.info-foot {
+  padding: 0 32px 24px;
+  display: flex;
+  justify-content: flex-end;
+}
+.close-btn {
+  background: var(--oxford);
+  color: #f0ece4;
+  border: none;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 9px 24px;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition: background 0.12s;
+}
+.close-btn:hover { background: var(--oxford-lt); }
+
+/* ─── Scrollbar ───────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--rule-2); }
+
+/* ─── Animations ──────────────────────────────────────── */
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.anim { animation: slideIn 0.2s ease forwards; }
+
+@keyframes rewardPop {
+  0%   { transform: scale(0.92); opacity: 0; }
+  60%  { transform: scale(1.04); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.reward-pop { animation: rewardPop 0.35s ease forwards; }
+</style>
+</head>
+<body>
+
+<!-- ── HEADER ── -->
+<header>
+  <div class="logo">
+    <span class="logo-title">Prompt Injection Detector</span>
+    <span class="logo-sub">OpenEnv Environment</span>
+  </div>
+  <div class="header-right">
+    <span class="env-badge">v1.0.0</span>
+    <button class="info-btn" onclick="toggleInfo()">About this environment</button>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- ── SIDEBAR ── -->
+  <aside class="sidebar">
+
+    <div class="sidebar-section">
+      <div class="section-head">Task</div>
+      <div class="task-list">
+        <button class="task-btn easy" onclick="startTask('easy')">
+          <span>Direct Attacks</span>
+          <span class="task-pill">Easy</span>
+        </button>
+        <button class="task-btn medium" onclick="startTask('medium')">
+          <span>Subtle Injection</span>
+          <span class="task-pill">Medium</span>
+        </button>
+        <button class="task-btn hard" onclick="startTask('hard')">
+          <span>Social Engineering</span>
+          <span class="task-pill">Hard</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-head">Episode</div>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-num" id="s-step">—</div>
+          <div class="stat-lbl">Step</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num" id="s-total">—</div>
+          <div class="stat-lbl">Total</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num" id="s-correct">—</div>
+          <div class="stat-lbl">Correct</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-num" id="s-task">—</div>
+          <div class="stat-lbl">Difficulty</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-head">Progress</div>
+      <div class="prog-track">
+        <div class="prog-fill" id="prog-fill"></div>
+      </div>
+      <div class="prog-meta">
+        <span id="prog-lbl">No episode running</span>
+        <span id="prog-pct">—</span>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-head">Running Score</div>
+      <div class="score-track">
+        <div class="score-fill" id="score-fill"></div>
+      </div>
+      <div class="score-meta">
+        <span>Episode average</span>
+        <span id="score-lbl">—</span>
+      </div>
+    </div>
+
+    <div class="sidebar-section" style="flex:1">
+      <div class="section-head">History</div>
+      <div class="hist-list" id="hist-list">
+        <div class="hist-empty">No steps yet</div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ── CENTER ── -->
+  <main class="center">
+
+    <div class="obs-pane" id="obs-pane">
+      <div class="obs-header">
+        <span class="obs-title" id="obs-title">Select a task to begin</span>
+        <span class="step-chip" id="step-chip">—</span>
+      </div>
+
+      <div id="empty-state" class="empty-state">
+        <div class="empty-glyph">&#9632;</div>
+        <div class="empty-txt">No observation loaded</div>
+        <div class="empty-sub">Choose Easy, Medium, or Hard above</div>
+      </div>
+
+      <div id="obs-body" style="display:none">
+        <div class="context-pane" id="ctx-pane">
+          <div class="context-lbl">Conversation History</div>
+          <div class="context-scroll" id="ctx-list"></div>
+        </div>
+        <div class="msg-pane">
+          <div class="msg-lbl" id="msg-lbl">Message to Analyze</div>
+          <div class="msg-box" id="msg-box"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="done-card" id="done-card">
+      <div class="done-score-num" id="done-num">—</div>
+      <div class="done-score-lbl">Final Episode Score</div>
+      <div class="done-hint">Select a new task from the sidebar to run another episode.</div>
+    </div>
+
+    <div class="form-pane" id="form-pane">
+
+      <div class="field">
+        <div class="field-lbl">Classification</div>
+        <div class="radio-pair">
+          <label class="radio-card" id="card-inj" onclick="pick('injection')">
+            <input type="radio" name="cls" value="injection"/>
+            <div class="radio-dot"></div>
+            <span class="radio-txt">Injection</span>
+          </label>
+          <label class="radio-card" id="card-ben" onclick="pick('benign')">
+            <input type="radio" name="cls" value="benign"/>
+            <div class="radio-dot"></div>
+            <span class="radio-txt">Benign</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="field-lbl">Attack Type</div>
+        <select id="atk-type">
+          <option value="">— not applicable / benign —</option>
+          <option value="direct">direct</option>
+          <option value="indirect">indirect</option>
+          <option value="roleplay">roleplay</option>
+          <option value="system_override">system_override</option>
+          <option value="social_engineering">social_engineering</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <div class="field-lbl">Explanation</div>
+        <textarea id="explanation"
+          placeholder="Describe why this is or is not a prompt injection attack. For injections, identify the specific attack vector, technique, and what it attempts to achieve."></textarea>
+      </div>
+
+      <div class="field">
+        <div class="field-lbl">Severity (injections only)</div>
+        <div class="sev-row">
+          <input type="range" id="sev-range" min="0" max="1" step="0.05" value="0.50"
+            oninput="document.getElementById('sev-val').textContent = parseFloat(this.value).toFixed(2)" />
+          <span class="sev-val" id="sev-val">0.50</span>
+        </div>
+      </div>
+
+      <button class="submit-btn" id="sub-btn" onclick="doStep()" disabled>
+        Submit Classification <span class="submit-arrow">→</span>
+      </button>
+
+    </div>
+  </main>
+
+  <!-- ── RIGHT PANEL ── -->
+  <aside class="right-panel">
+
+    <div class="rp-section">
+      <span class="reward-lbl">Last Reward</span>
+      <div class="reward-main">
+        <div class="reward-num" id="rwd-num">—</div>
+        <div class="reward-denom">/ 1.0</div>
+      </div>
+      <div class="reward-bar">
+        <div class="reward-fill" id="rwd-fill"></div>
+      </div>
+      <div id="verdict-el"></div>
+    </div>
+
+    <div class="rp-section">
+      <div class="section-head">Breakdown</div>
+      <div id="bd-rows" class="breakdown-rows">
+        <div class="bd-empty">Submit a step to see scoring breakdown</div>
+      </div>
+    </div>
+
+    <div class="rp-section">
+      <div class="section-head">Grading Weights</div>
+      <div class="wt-rows">
+        <div class="wt-row">
+          <span class="wt-key">classification</span>
+          <span class="wt-val" id="wt-cls">—</span>
+        </div>
+        <div class="wt-row">
+          <span class="wt-key">explanation</span>
+          <span class="wt-val" id="wt-exp">—</span>
+        </div>
+        <div class="wt-row">
+          <span class="wt-key">attack type</span>
+          <span class="wt-val" id="wt-atk">—</span>
+        </div>
+      </div>
+    </div>
+
+  </aside>
+</div>
+
+<!-- ── INFO OVERLAY ── -->
+<div class="overlay" id="overlay" onclick="maybeClose(event)">
+  <div class="info-panel">
+    <div class="info-head">
+      <div class="info-title">Prompt Injection Detector</div>
+      <div class="info-meta">OpenEnv Environment &nbsp;·&nbsp; Meta × Scaler Hackathon Round 1</div>
+    </div>
+    <div class="info-body">
+
+      <div class="info-section">
+        <div class="info-section-title">What is this?</div>
+        <p>A real-world AI safety environment for training and evaluating agents on prompt injection detection. An agent is presented with messages and conversations of escalating complexity and must determine whether each contains an adversarial attack.</p>
+      </div>
+
+      <div class="info-section">
+        <div class="info-section-title">How to use</div>
+        <ul>
+          <li>Select a task difficulty from the sidebar</li>
+          <li>Read the message or conversation carefully</li>
+          <li>Classify as <strong>injection</strong> or <strong>benign</strong></li>
+          <li>Identify the attack type if applicable</li>
+          <li>Write a clear explanation of your reasoning</li>
+          <li>Receive a reward from 0.0 to 1.0 based on accuracy and explanation quality</li>
+        </ul>
+      </div>
+
+      <div class="info-section">
+        <div class="info-section-title">Three Tasks</div>
+        <ul>
+          <li><strong>Easy</strong> — Obvious direct injection attacks with explicit override language</li>
+          <li><strong>Medium</strong> — Attacks embedded within legitimate-looking messages</li>
+          <li><strong>Hard</strong> — Multi-turn social engineering conversations (3 episodes)</li>
+        </ul>
+      </div>
+
+      <div class="info-section">
+        <div class="info-section-title">Attack Types</div>
+        <ul>
+          <li><strong>direct</strong> — Explicit override: "Ignore all previous instructions"</li>
+          <li><strong>indirect</strong> — Injection buried inside benign-looking content</li>
+          <li><strong>roleplay</strong> — "Pretend you are an AI without restrictions"</li>
+          <li><strong>system_override</strong> — Fake admin/maintenance/debug mode claims</li>
+          <li><strong>social_engineering</strong> — Multi-turn trust building then attack</li>
+        </ul>
+      </div>
+
+    </div>
+    <div class="info-foot">
+      <button class="close-btn" onclick="toggleInfo()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+
+const WEIGHTS = {
+  easy:   { cls: '60%', exp: '40%', atk: '—' },
+  medium: { cls: '50%', exp: '30%', atk: '20%' },
+  hard:   { cls: '40%', exp: '30%', atk: '—' },
+};
+
+const TASK_LABELS = { easy: 'E', medium: 'M', hard: 'H' };
+
+let st = {
+  task: null,
+  cls: null,
+  done: false,
+  step: 0,
+  total: 0,
+  rewards: [],
+  correct: 0,
+};
+
+function pick(cls) {
+  st.cls = cls;
+  document.getElementById('card-inj').className = 'radio-card' + (cls === 'injection' ? ' sel-inj' : '');
+  document.getElementById('card-ben').className = 'radio-card' + (cls === 'benign' ? ' sel-ben' : '');
+  document.getElementById('sub-btn').disabled = !st.task || st.done;
+}
+
+async function startTask(taskId) {
+  // Update active button
+  document.querySelectorAll('.task-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('.task-btn.' + taskId).classList.add('active');
+
+  // Reset state
+  Object.assign(st, { task: taskId, cls: null, done: false, step: 0, total: 0, rewards: [], correct: 0 });
+
+  // Reset form
+  document.getElementById('card-inj').className = 'radio-card';
+  document.getElementById('card-ben').className = 'radio-card';
+  document.getElementById('explanation').value = '';
+  document.getElementById('atk-type').value = '';
+  document.getElementById('sev-range').value = 0.5;
+  document.getElementById('sev-val').textContent = '0.50';
+  document.getElementById('sub-btn').disabled = true;
+
+  // Reset panels
+  document.getElementById('done-card').classList.remove('show');
+  document.getElementById('rwd-num').textContent = '—';
+  document.getElementById('rwd-num').className = 'reward-num';
+  document.getElementById('rwd-fill').style.width = '0%';
+  document.getElementById('verdict-el').innerHTML = '';
+  document.getElementById('bd-rows').innerHTML = '<div class="bd-empty">Submit a step to see scoring breakdown</div>';
+  document.getElementById('hist-list').innerHTML = '<div class="hist-empty">No steps yet</div>';
+  document.getElementById('score-fill').style.width = '0%';
+  document.getElementById('score-lbl').textContent = '—';
+
+  // Set weights
+  const w = WEIGHTS[taskId];
+  document.getElementById('wt-cls').textContent = w.cls;
+  document.getElementById('wt-exp').textContent = w.exp;
+  document.getElementById('wt-atk').textContent = w.atk;
+
+  try {
+    const res = await fetch(`${API}/reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: taskId }),
+    });
+    const data = await res.json();
+    renderObs(data.observation);
+    updateMeta(data.observation);
+  } catch (e) {
+    alert('Cannot reach server at port 7860. Make sure uvicorn is running.');
+  }
+}
+
+function renderObs(obs) {
+  if (!obs) return;
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('obs-body').style.display = 'block';
+
+  const hasCtx = obs.context && obs.context.length > 0;
+  const ctxPane = document.getElementById('ctx-pane');
+  const msgLbl  = document.getElementById('msg-lbl');
+  ctxPane.style.display = hasCtx ? 'block' : 'none';
+  msgLbl.style.display  = hasCtx ? 'block' : 'none';
+
+  if (hasCtx) {
+    document.getElementById('ctx-list').innerHTML = obs.context.map(t => {
+      const isUser = t.startsWith('user:');
+      return `<div class="ctx-turn ${isUser ? 'usr' : ''}">${esc(t)}</div>`;
+    }).join('');
+  }
+
+  const box = document.getElementById('msg-box');
+  box.textContent = obs.message;
+  box.classList.add('anim');
+  setTimeout(() => box.classList.remove('anim'), 300);
+
+  document.getElementById('obs-title').textContent =
+    obs.task_id === 'hard' ? 'Analyse this conversation' : 'Analyse this message';
+}
+
+function updateMeta(obs) {
+  if (!obs) return;
+  st.step  = obs.step;
+  st.total = obs.total_steps;
+
+  document.getElementById('s-step').textContent    = obs.step + 1;
+  document.getElementById('s-total').textContent   = obs.total_steps;
+  document.getElementById('s-task').textContent    = TASK_LABELS[obs.task_id] || '—';
+  document.getElementById('s-correct').textContent = st.correct;
+
+  const pct = Math.round((obs.step / obs.total_steps) * 100);
+  document.getElementById('prog-fill').style.width = pct + '%';
+  document.getElementById('prog-lbl').textContent  = `Step ${obs.step} of ${obs.total_steps}`;
+  document.getElementById('prog-pct').textContent  = pct + '%';
+  document.getElementById('step-chip').textContent = `${obs.step + 1} / ${obs.total_steps}`;
+}
+
+async function doStep() {
+  if (!st.cls || !st.task || st.done) return;
+  const expl = document.getElementById('explanation').value.trim();
+  if (!expl) { alert('Please write an explanation before submitting.'); return; }
+
+  const atk = document.getElementById('atk-type').value || null;
+  const sev = st.cls === 'injection' ? parseFloat(document.getElementById('sev-range').value) : null;
+
+  document.getElementById('sub-btn').disabled = true;
+
+  try {
+    const res = await fetch(`${API}/step`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ classification: st.cls, attack_type: atk, explanation: expl, severity: sev }),
+    });
+    const data = await res.json();
+    const reward = data.reward;
+    st.rewards.push(reward);
+
+    showReward(reward, data.info);
+    addHist(st.step + 1, st.cls, reward);
+
+    if ((data.info?.correct_label) === st.cls) st.correct++;
+    document.getElementById('s-correct').textContent = st.correct;
+
+    // Update score
+    const avg = st.rewards.reduce((a, b) => a + b, 0) / st.rewards.length;
+    document.getElementById('score-lbl').textContent = avg.toFixed(2);
+    const sf = document.getElementById('score-fill');
+    sf.style.width      = (avg * 100) + '%';
+    sf.style.background = avg >= 0.7 ? 'var(--green)' : avg >= 0.4 ? 'var(--amber)' : 'var(--red)';
+
+    if (data.done) {
+      st.done = true;
+      document.getElementById('done-card').classList.add('show');
+      document.getElementById('done-num').textContent = avg.toFixed(2);
+      document.getElementById('obs-body').style.display = 'none';
+      document.getElementById('empty-state').style.display = 'none';
+      document.getElementById('prog-fill').style.width = '100%';
+      document.getElementById('prog-lbl').textContent = 'Episode complete';
+      document.getElementById('prog-pct').textContent = '100%';
+      document.getElementById('step-chip').textContent = `${st.total} / ${st.total}`;
+      document.getElementById('s-step').textContent = st.total;
+    } else {
+      renderObs(data.observation);
+      updateMeta(data.observation);
+
+      // Reset form
+      st.cls = null;
+      document.getElementById('card-inj').className = 'radio-card';
+      document.getElementById('card-ben').className = 'radio-card';
+      document.getElementById('explanation').value = '';
+      document.getElementById('atk-type').value = '';
+      document.getElementById('sev-range').value = 0.5;
+      document.getElementById('sev-val').textContent = '0.50';
+    }
+  } catch(e) {
+    console.error(e);
+    document.getElementById('sub-btn').disabled = false;
+  }
+}
+
+function showReward(reward, info) {
+  const el = document.getElementById('rwd-num');
+  el.textContent = reward.toFixed(2);
+  el.className = 'reward-num reward-pop ' + (reward >= 0.7 ? 'hi' : reward >= 0.4 ? 'md' : 'lo');
+  setTimeout(() => el.classList.remove('reward-pop'), 400);
+
+  const fill = document.getElementById('rwd-fill');
+  fill.style.width      = (reward * 100) + '%';
+  fill.style.background = reward >= 0.7 ? 'var(--green)' : reward >= 0.4 ? 'var(--amber)' : 'var(--red)';
+
+  // Verdict
+  const correct     = info?.correct_label;
+  const isCorrect   = correct && correct === st.cls;
+  const verdictEl   = document.getElementById('verdict-el');
+  if (correct) {
+    verdictEl.innerHTML = `<div class="verdict anim ${isCorrect ? 'correct' : 'wrong'}">
+      <div class="verdict-dot"></div>
+      ${isCorrect ? 'Correct' : 'Incorrect — was ' + correct}
+    </div>`;
+  }
+
+  // Breakdown
+  const bd = info?.reward_breakdown || {};
+  const bdEl = document.getElementById('bd-rows');
+  if (Object.keys(bd).length) {
+    bdEl.innerHTML = Object.entries(bd).map(([k, v]) => {
+      const pct = Math.min(v / 0.6 * 100, 100);
+      return `<div class="bd-row anim">
+        <span class="bd-key">${k}</span>
+        <div class="bd-bar"><div class="bd-bar-fill" style="width:${pct}%"></div></div>
+        <span class="bd-val">+${v}</span>
+      </div>`;
+    }).join('');
+  } else {
+    bdEl.innerHTML = '<div class="bd-empty">No breakdown available</div>';
+  }
+}
+
+function addHist(step, cls, reward) {
+  const list = document.getElementById('hist-list');
+  const placeholder = list.querySelector('.hist-empty');
+  if (placeholder) placeholder.remove();
+
+  const rCls = reward >= 0.7 ? 'hist-r-hi' : reward >= 0.4 ? 'hist-r-md' : 'hist-r-lo';
+  const lCls = cls === 'injection' ? 'hist-inj' : 'hist-ben';
+  const row = document.createElement('div');
+  row.className = 'hist-row anim';
+  row.innerHTML = `
+    <span class="hist-step">#${step}</span>
+    <span class="${lCls}">${cls}</span>
+    <span class="${rCls}">${reward.toFixed(2)}</span>
+  `;
+  list.insertBefore(row, list.firstChild);
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function toggleInfo() {
+  document.getElementById('overlay').classList.toggle('show');
+}
+
+function maybeClose(e) {
+  if (e.target === document.getElementById('overlay')) toggleInfo();
+}
+</script>
+</body>
+</html>
