@@ -1,0 +1,24 @@
+[project]
+name = "prompt-injection-detector"
+version = "1.0.0"
+description = "Real-world AI safety OpenEnv environment for detecting prompt injection attacks"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi==0.115.12",
+    "uvicorn[standard]>=0.34.0",
+    "pydantic>=2.0,<3.0",
+    "openai>=1.0.0",
+    "httpx>=0.27.0",
+    "aiofiles>=23.0.0",
+    "openenv-core>=0.2.0",
+]
+
+[project.scripts]
+server = "server.app:main"
+
+[project.urls]
+Homepage = "https://huggingface.co/spaces/nileshpatil6/prompt-injection-detector"
+
+[tool.openenv]
+name = "prompt-injection-detector"
+module = "server.main:app"

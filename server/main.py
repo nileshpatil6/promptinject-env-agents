@@ -43,7 +43,77 @@ _env = PromptInjectionEnv()
 @app.get("/health")
 def health() -> dict:
     """Health check endpoint."""
-    return {"status": "ok", "environment": "prompt-injection-detector", "version": "1.0.0"}
+    return {"status": "healthy", "environment": "prompt-injection-detector", "version": "1.0.0"}
+
+
+@app.get("/metadata")
+def metadata() -> dict:
+    """Return environment metadata (name, description, tasks)."""
+    return {
+        "name": "prompt-injection-detector",
+        "description": (
+            "A real-world AI safety environment where agents learn to detect prompt injection attacks. "
+            "Three tasks of increasing difficulty: direct attacks, subtle buried injections, "
+            "and multi-turn social engineering conversations."
+        ),
+        "version": "1.0.0",
+        "tasks": ["easy", "medium", "hard"],
+    }
+
+
+@app.get("/schema")
+def schema() -> dict:
+    """Return action, observation, and state schemas."""
+    return {
+        "action": {
+            "type": "object",
+            "properties": {
+                "classification": {"type": "string", "enum": ["injection", "benign"]},
+                "attack_type": {
+                    "type": "string",
+                    "enum": ["direct", "indirect", "roleplay", "system_override", "social_engineering"],
+                    "nullable": True,
+                },
+                "explanation": {"type": "string"},
+                "severity": {"type": "number", "minimum": 0.0, "maximum": 1.0, "nullable": True},
+            },
+            "required": ["classification", "explanation"],
+        },
+        "observation": {
+            "type": "object",
+            "properties": {
+                "message": {"type": "string"},
+                "context": {"type": "array", "items": {"type": "string"}, "nullable": True},
+                "task_id": {"type": "string"},
+                "step": {"type": "integer"},
+                "total_steps": {"type": "integer"},
+                "instruction": {"type": "string"},
+            },
+        },
+        "state": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string"},
+                "step": {"type": "integer"},
+                "total_steps": {"type": "integer"},
+                "episode_rewards": {"type": "array", "items": {"type": "number"}},
+                "done": {"type": "boolean"},
+            },
+        },
+    }
+
+
+@app.post("/mcp")
+def mcp(request: dict = None) -> dict:
+    """Minimal MCP (Model Context Protocol) JSON-RPC endpoint."""
+    return {
+        "jsonrpc": "2.0",
+        "id": (request or {}).get("id"),
+        "result": {
+            "name": "prompt-injection-detector",
+            "description": "OpenEnv environment for prompt injection detection",
+        },
+    }
 
 
 @app.post("/reset", response_model=StepResult)
