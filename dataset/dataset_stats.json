@@ -1,11 +1,11 @@
 {
   "format": "shieldgemma",
-  "total": 171,
-  "train": 136,
-  "val": 17,
-  "test": 18,
+  "total": 266,
+  "train": 212,
+  "val": 27,
+  "test": 27,
   "sources": {
-    "raw_injections": 106,
+    "raw_injections": 201,
     "easy": 10,
     "medium": 10,
     "hard": 5,
