@@ -1,0 +1,16 @@
+{
+  "format": "shieldgemma",
+  "total": 171,
+  "train": 136,
+  "val": 17,
+  "test": 18,
+  "sources": {
+    "raw_injections": 106,
+    "easy": 10,
+    "medium": 10,
+    "hard": 5,
+    "indirect": 10,
+    "pipeline": 20,
+    "dynamic_attacks": 10
+  }
+}
