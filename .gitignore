@@ -7,3 +7,5 @@ venv/
 *.egg-info/
 dist/
 build/
+shieldgemma-adapter/
+shieldgemma-adapter.zip
