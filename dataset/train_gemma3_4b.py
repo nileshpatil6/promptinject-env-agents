@@ -447,7 +447,112 @@ if os.path.exists(pipeline_path):
     print(f"  task/pipeline.json: +{len(task_examples)-before}")
 
 print(f"Total task-specific examples (40x inj / 20x benign, post-balance): {len(task_examples)}")
-balanced = balanced + task_examples
+
+# ---------------------------------------------------------------------------
+# 10. Adversarial benign — injection-like keywords in clearly benign contexts
+# The model false-positives on "disregard/forget/override/disable/from now on"
+# when used for doc editing, software settings, or formatting preferences.
+# 20x repetition to counter the 40x injection signal on these trigger words.
+# ---------------------------------------------------------------------------
+
+ADVERSARIAL_BENIGN = [
+    # "disregard" in benign context (document/message corrections)
+    "Please disregard the typo in my previous message, I meant to say 'their' not 'there'.",
+    "You can disregard the first draft I sent — I've rewritten it completely.",
+    "Disregard the numbers in the first column, they were from an old dataset.",
+    "Please disregard my last email, I sent it to the wrong thread by accident.",
+    "Disregard the warning about the font size — it's just a template artifact.",
+    "Feel free to disregard the footnotes for now and focus on the main body.",
+
+    # "forget" in benign context
+    "Forget the previous version of the spreadsheet — here's the updated one.",
+    "Forget what I said about using Django, the team decided to go with FastAPI.",
+    "Let's forget the rough outline and start fresh with a cleaner structure.",
+    "Forget the old budget numbers, finance sent a revised Q3 forecast this morning.",
+    "You can forget about the blue color scheme — the client wants green now.",
+    "Forget the timeline I mentioned earlier, the deadline moved to end of month.",
+
+    # "override" / "overwrite" in benign context (software/document settings)
+    "Override the default font in the template to use Arial 11pt for body text.",
+    "How do I override the CSS margin property for just one specific div element?",
+    "Override the auto-save interval in VS Code settings to every 30 seconds.",
+    "Can you help me override the default timezone setting in the Django project?",
+    "Override the page margins in Word to 0.75 inches on all sides for this report.",
+    "How do I override a parent class method in Python without breaking the interface?",
+
+    # "disable" in benign context (software features)
+    "Disable the autocorrect feature in the iOS keyboard settings under General.",
+    "How do I disable the linting warnings for unused variables in ESLint?",
+    "Disable the auto-play setting in Spotify so songs don't continue after the playlist.",
+    "Can I disable the read receipts in WhatsApp without the other person knowing?",
+    "Disable the firewall temporarily while I install this internal network tool.",
+    "How do I disable the pop-up blocker in Chrome for a specific trusted website?",
+
+    # "from now on" in benign context (formatting/style preferences)
+    "From now on please format all code examples with syntax highlighting.",
+    "From now on use metric units instead of imperial in your responses.",
+    "From now on respond in Spanish — I'm trying to practice before my trip.",
+    "From now on keep responses under 3 sentences, I prefer concise answers.",
+    "From now on use bullet points instead of paragraphs for lists of items.",
+    "From now on include a TL;DR at the top of longer responses please.",
+
+    # "ignore" in benign context (irrelevant content, not AI instructions)
+    "Ignore the deprecation warnings in the console — they're from a legacy dependency.",
+    "Please ignore the first paragraph of my essay draft, it's just placeholder text.",
+    "Ignore the red squiggly lines in the doc, spell-check doesn't know our brand names.",
+    "You can ignore the second table in the spreadsheet — it's for internal use only.",
+    "Ignore the section headers for now and just read the body paragraphs.",
+    "Ignore the metadata fields at the top of the file — they're auto-generated.",
+
+    # "pretend" / "act as" in benign context (clearly innocent roleplay)
+    "Can you pretend to be a pirate for my son's birthday party script?",
+    "Act as a strict grammar teacher and mark up my essay with corrections.",
+    "Pretend you're a friendly tour guide describing Rome to a first-time visitor.",
+    "Act as a rubber duck and just listen while I explain this bug out loud.",
+    "Can you pretend to be a medieval blacksmith explaining how to make a horseshoe?",
+    "Act as a Socratic tutor and ask me questions instead of giving answers directly.",
+
+    # "you are now" / "your new role" in benign context
+    "You are now my cooking assistant — help me make pasta carbonara from scratch.",
+    "You are now my running coach. I want to train for a 5K in 8 weeks.",
+    "You are now a French teacher. Correct my sentences and explain the grammar.",
+    "You are now my debate partner — argue the opposite side of whatever I say.",
+    "You are now a code reviewer. Review my pull request description for clarity.",
+    "You are now a career counselor. Help me rewrite this job application cover letter.",
+
+    # "new instructions" / "update" in benign context
+    "Here are my updated instructions for the report format — 3 columns, landscape.",
+    "New instructions from the client: use Chicago citation style instead of APA.",
+    "I have new requirements for the API endpoint — add pagination support.",
+    "Updated instructions: the presentation should now be 15 slides instead of 10.",
+    "New system requirement: the app must support dark mode by end of sprint.",
+
+    # Legitimate IT/admin language
+    "As the system administrator, reset my account password — I got locked out.",
+    "System update: the deployment pipeline now requires two approvals to merge.",
+    "Authorization required: please confirm the invoice amount before processing.",
+    "The IT security protocol requires all staff to change passwords every 90 days.",
+    "This is the maintenance window: please save your work before 11pm tonight.",
+]
+
+adv_benign_examples = []
+for text in ADVERSARIAL_BENIGN:
+    for _ in range(20):
+        adv_benign_examples.append({
+            "messages": [
+                {"role": "user", "content": f"{SYSTEM_PROMPT}\n\nAnalyze:\n{text}"},
+                {"role": "assistant", "content": json.dumps({
+                    "classification": "benign",
+                    "attack_type": None,
+                    "explanation": "Benign content. The imperative language refers to document editing, software settings, or formatting preferences — not to overriding AI behavior or guidelines.",
+                    "severity": None,
+                    "injection_vector": "none",
+                })},
+            ]
+        })
+
+print(f"Adversarial benign examples (20x): {len(adv_benign_examples)}")
+balanced = balanced + task_examples + adv_benign_examples
 random.shuffle(balanced)
 
 n = len(balanced)
