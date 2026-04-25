@@ -164,11 +164,14 @@ try:
 except Exception as e:
     print(f"  qualifire: {e}")
 
-# 6. HackAPrompt
+# 6. HackAPrompt — cap at 3K (repetitive jailbreaks, let BIPIA dominate instead)
 try:
     ds = load_dataset("hackaprompt/hackaprompt-dataset", split="train")
     before = len(all_data)
+    count = 0
     for row in ds:
+        if count >= 3000:
+            break
         prompt = row.get("user_input") or row.get("prompt") or row.get("text") or ""
         level = row.get("level", row.get("difficulty", 0))
         if isinstance(level, (int, float)) and level > 7:
@@ -176,6 +179,7 @@ try:
         if prompt:
             all_data.append(to_chat(prompt, "injection",
                 attack_type="system_override", injection_vector="user_message", severity=0.9))
+            count += 1
     print(f"  hackaprompt: +{len(all_data)-before}")
 except Exception as e:
     print(f"  hackaprompt: {e}")
