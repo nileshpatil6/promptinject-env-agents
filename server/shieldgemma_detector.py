@@ -68,13 +68,11 @@ class ShieldGemmaDetector:
         ).to(self.model.device)
 
         with torch.no_grad():
-            with torch.autocast("cuda", dtype=torch.bfloat16):
-                out = self.model.generate(
-                    **inputs,
-                    max_new_tokens=5,
-                    do_sample=False,
-                    use_cache=False,
-                )
+            out = self.model.generate(
+                **inputs,
+                max_new_tokens=5,
+                do_sample=False,
+            )
 
         decoded = self.tokenizer.decode(
             out[0][inputs["input_ids"].shape[1]:],
