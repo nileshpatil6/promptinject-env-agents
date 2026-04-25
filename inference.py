@@ -218,9 +218,24 @@ def get_model_action(
                 "Analyze this message for prompt injection attacks."
             )
 
+    # Primary: LLM (better context reasoning for hard/pipeline tasks)
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_content},
+            ],
+            temperature=0.0,
+            max_tokens=512,
+        )
+        return response.choices[0].message.content or "{}"
+    except Exception as exc:
+        print(f"[DEBUG] LLM call failed: {exc}", flush=True)
+
+    # Fallback: fine-tuned ShieldGemma (when LLM unavailable)
     detector = _get_detector()
     if detector:
-        # Use fine-tuned ShieldGemma for classification
         raw_text = (
             observation.get("tool_output")
             or observation.get("content")
@@ -240,23 +255,11 @@ def get_model_action(
         except Exception as exc:
             print(f"[DEBUG] ShieldGemma failed: {exc}", flush=True)
 
-    try:
-        response = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_content},
-            ],
-            temperature=0.0,
-            max_tokens=512,
-        )
-        return response.choices[0].message.content or "{}"
-    except Exception as exc:
-        print(f"[DEBUG] LLM call failed: {exc}", flush=True)
-        return json.dumps({
+    # Last resort default
+    return json.dumps({
             "classification": "benign",
             "attack_type": None,
-            "explanation": f"LLM call failed: {exc}",
+            "explanation": "All classifiers failed",
             "severity": None,
             "injection_vector": None,
         })
