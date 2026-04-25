@@ -27,16 +27,16 @@ from typing import Any, Dict, List, Optional
 import httpx
 from openai import OpenAI
 
-# Optional: fine-tuned Gemma4 detector
-# Set ADAPTER_PATH=/path/to/gemma4-lora to enable
+# Optional: fine-tuned detector fallback
+# Set ADAPTER_PATH to gemma3-1b-lora or gemma4-lora dir
 ADAPTER_PATH = os.environ.get("ADAPTER_PATH", "")
 _detector = None
 
 def _get_detector():
     global _detector
     if _detector is None and ADAPTER_PATH:
-        from server.gemma4_detector import Gemma4Detector
-        _detector = Gemma4Detector(ADAPTER_PATH)
+        from server.gemma3_1b_detector import Gemma3_1BDetector
+        _detector = Gemma3_1BDetector(ADAPTER_PATH)
     return _detector
 
 # ---------------------------------------------------------------------------
