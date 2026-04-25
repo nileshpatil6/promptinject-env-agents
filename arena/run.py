@@ -164,7 +164,7 @@ def run():
             # --- ATTACKER GRPO update (after each round) ---
             if len(episode_completions) >= args.group:
                 atk_metrics_last = attacker.update(
-                    prompts=[prompt] * args.group,
+                    prompts=[prompt],
                     completions=completions,
                     rewards=rewards,
                 )
