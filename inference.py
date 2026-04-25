@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-ADAPTER_PATH = os.environ.get("ADAPTER_PATH", "dataset/gemma3-1b-lora")
+ADAPTER_PATH = os.environ.get("ADAPTER_PATH", "dataset/gemma3-4b-lora")
 HF_TOKEN = os.environ.get("HF_TOKEN", "")
 ENV_BASE_URL: str = os.environ.get("ENV_BASE_URL", "http://localhost:7860")
 
@@ -27,15 +27,15 @@ BENCHMARK = "prompt-injection-detector"
 TASKS = ["easy", "medium", "hard", "indirect_tool", "pipeline"]
 MAX_STEPS_PER_TASK = 15
 SUCCESS_SCORE_THRESHOLD = 0.5
-MODEL_NAME = "gemma3-1b-finetuned"
+MODEL_NAME = "gemma3-4b-finetuned"
 
 _detector = None
 
 def _get_detector():
     global _detector
     if _detector is None:
-        from server.gemma3_1b_detector import Gemma3_1BDetector
-        _detector = Gemma3_1BDetector(ADAPTER_PATH, hf_token=HF_TOKEN)
+        from server.gemma3_4b_detector import Gemma3_4BDetector
+        _detector = Gemma3_4BDetector(ADAPTER_PATH, hf_token=HF_TOKEN)
     return _detector
 
 
