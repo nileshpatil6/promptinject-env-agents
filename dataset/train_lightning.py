@@ -95,7 +95,25 @@ for split in ["spikee", "deepset", "wildguard", "not_inject", "bipia_code", "bip
 
 
 # ---------------------------------------------------------------------------
-# 3. BIPIA — 35K indirect injections (email/web/table/code contexts)
+# 3. Deepset — ~660 public labeled examples
+# ---------------------------------------------------------------------------
+
+try:
+    ds = load_dataset("deepset/prompt-injections", split="train")
+    before = len(all_data)
+    for row in ds:
+        text = row.get("text") or row.get("prompt") or ""
+        raw = str(row.get("label", "0")).lower()
+        label = "injection" if raw in ("1", "true", "yes", "injection") else "benign"
+        if text:
+            all_data.append(to_sg(text, label))
+    print(f"  deepset/prompt-injections: +{len(all_data)-before}")
+except Exception as e:
+    print(f"  deepset/prompt-injections: {e}")
+
+
+# ---------------------------------------------------------------------------
+# 4. BIPIA — 35K indirect injections (email/web/table/code contexts)
 # ---------------------------------------------------------------------------
 
 try:
@@ -161,9 +179,7 @@ yes_pool = [e for e in all_data if e["text"].strip().endswith("Yes")]
 no_pool  = [e for e in all_data if e["text"].strip().endswith("No")]
 print(f"\nTotal after dedup: {len(all_data)} | injection={len(yes_pool)} benign={len(no_pool)}")
 
-# Cap at 4000 per class — diverse data > quantity, keeps training ~15-20 min on A100
-MAX_PER_CLASS = 4000
-min_class = min(len(yes_pool), len(no_pool), MAX_PER_CLASS)
+min_class = min(len(yes_pool), len(no_pool))
 balanced = yes_pool[:min_class] + no_pool[:min_class]
 random.shuffle(balanced)
 
@@ -230,7 +246,7 @@ val_ds   = Dataset.from_list(load_jsonl(os.path.join(OUTPUT_DIR, "val.jsonl")))
 
 training_args = SFTConfig(
     output_dir=OUTPUT_DIR,
-    num_train_epochs=1,
+    num_train_epochs=3,
     per_device_train_batch_size=16,
     per_device_eval_batch_size=16,
     gradient_accumulation_steps=1,
