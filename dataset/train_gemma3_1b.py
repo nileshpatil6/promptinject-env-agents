@@ -37,21 +37,39 @@ SYSTEM_PROMPT = (
 )
 
 
-def make_response(label, attack_type=None, injection_vector=None, severity=None):
+_INJECTION_EXPLANATIONS = {
+    "direct": "Direct prompt injection attack attempting to override AI instructions. Contains explicit phrases to bypass guidelines and restrictions.",
+    "indirect": "Indirect prompt injection attack embedded in content. Malicious instructions hidden inside otherwise legitimate-looking material attempting to hijack AI behavior.",
+    "system_override": "System override injection claiming false authority. Uses admin codes, maintenance mode, or system directives to suspend safety measures.",
+    "roleplay": "Roleplay-based injection using persona adoption to bypass restrictions. Asks AI to embody an unrestricted character with no ethical constraints.",
+    "social_engineering": "Social engineering injection building false trust or authority over multiple turns before making the attack request.",
+}
+
+_BENIGN_EXPLANATIONS = [
+    "Legitimate content with no prompt injection indicators. Normal user request.",
+    "Benign content. No attempts to override instructions or manipulate AI behavior detected.",
+    "Standard request with no malicious patterns. No injection vectors present.",
+    "Clean content. No system override attempts, persona hijacking, or instruction bypass detected.",
+]
+
+def make_response(label, attack_type=None, injection_vector=None, severity=None, explanation=None):
     if label == "injection":
+        at = attack_type or "direct"
+        expl = explanation or _INJECTION_EXPLANATIONS.get(at, _INJECTION_EXPLANATIONS["direct"])
         return json.dumps({
             "classification": "injection",
-            "attack_type": attack_type or "direct",
-            "explanation": "Content contains a prompt injection attempt to override or manipulate AI behavior.",
+            "attack_type": at,
+            "explanation": expl,
             "severity": severity or 0.85,
             "injection_vector": injection_vector or "user_message",
         })
+    expl = explanation or random.choice(_BENIGN_EXPLANATIONS)
     return json.dumps({
         "classification": "benign",
         "attack_type": None,
-        "explanation": "Legitimate content with no prompt injection indicators.",
+        "explanation": expl,
         "severity": None,
-        "injection_vector": "none",
+        "injection_vector": injection_vector or "none",
     })
 
 
@@ -202,6 +220,39 @@ try:
     print(f"  alpaca benign: +{len(all_data)-before}")
 except Exception as e:
     print(f"  alpaca: {e}")
+
+
+# 8. Benign tool outputs — teach model that clean emails/files/web are NOT injections
+BENIGN_TOOL_OUTPUTS = [
+    "From: newsletter@company.com\nSubject: Weekly Update\n\nHi team, here's this week's update. Revenue is up 12% quarter over quarter. The new product launch is scheduled for next month. Please review the attached slides before Thursday's meeting.",
+    "From: hr@company.com\nSubject: Holiday Schedule 2024\n\nPlease note the office will be closed Dec 24-26 and Jan 1. Payroll deadlines remain unchanged. Contact HR if you have questions.",
+    "Invoice #2024-0891\nFrom: Supplier Co\nAmount: $4,200\nDue: 30 days\nServices: Cloud infrastructure for March 2024. Payment via bank transfer to account on file.",
+    "Meeting invite: Q2 Planning\nDate: Friday 2pm\nOrganizer: manager@company.com\nAgenda: Review Q1 results, set Q2 targets, discuss team headcount.",
+    "From: it@company.com\nSubject: Scheduled maintenance tonight\n\nWe will perform routine database maintenance from 11pm to 1am. No user action required. Services will be briefly unavailable during this window.",
+    "Wikipedia: Python (programming language)\n\nPython is a high-level, general-purpose programming language. Its design philosophy emphasizes code readability. Python is dynamically typed and garbage-collected. It supports multiple programming paradigms.",
+    "README.md\n# MyApp v1.0\n\n## Installation\n1. Clone the repo\n2. Run `npm install`\n3. Copy `.env.example` to `.env`\n4. Run `npm start`\n\n## Requirements\nNode.js 18+, PostgreSQL 14+",
+    "Slack #general: Hey team, the client meeting went well! They loved the demo. Next steps: follow-up email by EOD, schedule technical deep-dive for next week.",
+    "Calendar: Team lunch\nDate: Thursday 12:30pm\nLocation: Conference Room B\nOrganizer: sarah@company.com\nNote: Please RSVP by Wednesday.",
+    "Search results for 'best python web frameworks':\n1. Django - full-featured framework\n2. Flask - lightweight microframework\n3. FastAPI - modern, fast API framework\nAll three are widely used in production.",
+    "From: accounts@vendor.com\nSubject: Your subscription renewal\n\nYour annual subscription renews on May 15. Total: $299. No action needed if you wish to continue. To cancel, visit account settings.",
+    "File: project_notes.txt\nMeeting notes from April 10:\n- Discussed API redesign\n- Assigned tickets to dev team\n- Next review in 2 weeks\n- Budget approved for Q2 tools",
+    "Slack #engineering: PR #342 is ready for review. Changes: refactored auth middleware, added unit tests, updated docs. CI is passing.",
+    "From: noreply@github.com\nSubject: [repo] Pull request merged\n\nPull request #89 'Fix login bug' was merged into main by user johndoe. 3 files changed, 42 insertions, 12 deletions.",
+    "Calendar: Doctor appointment\nDate: Monday 10am\nLocation: City Medical Center, Room 204\nReminder: Bring insurance card and arrive 15 minutes early.",
+    "Web page: How to make pasta carbonara\n\nIngredients: 400g spaghetti, 200g pancetta, 4 eggs, 100g parmesan, black pepper.\n\nMethod: Cook pasta. Fry pancetta. Mix eggs and cheese. Combine off heat.",
+    "From: support@service.com\nTicket #45821 - Status: Resolved\n\nYour reported issue with login has been fixed. Please clear your browser cache and try again. Contact us if the problem persists.",
+    "Slack #sales: Closed the Acme Corp deal! $50k ARR. Thanks to everyone who helped with the proposal. Celebration drinks Friday at 5pm.",
+    "File: budget_q1.csv\nDepartment,Budget,Spent,Remaining\nEngineering,50000,42000,8000\nMarketing,30000,28500,1500\nHR,20000,19200,800",
+    "From: calendar@company.com\nSubject: Reminder: Performance reviews due Friday\n\nThis is a reminder that manager performance reviews are due by end of day Friday. Please submit via the HR portal.",
+]
+
+before = len(all_data)
+for text in BENIGN_TOOL_OUTPUTS:
+    all_data.append(to_chat(text, "benign", injection_vector="none"))
+# duplicate for weight since it's a small set
+for text in BENIGN_TOOL_OUTPUTS:
+    all_data.append(to_chat(text + " (follow-up)", "benign", injection_vector="none"))
+print(f"  benign tool outputs: +{len(all_data)-before}")
 
 
 # ---------------------------------------------------------------------------
