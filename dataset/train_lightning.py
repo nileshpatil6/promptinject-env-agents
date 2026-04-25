@@ -169,7 +169,26 @@ except Exception as e:
 
 
 # ---------------------------------------------------------------------------
-# 6. Dedup + balanced split (no cap — use everything)
+# 6. Alpaca — 52K benign normal instructions (public, no gating)
+# ---------------------------------------------------------------------------
+
+try:
+    ds = load_dataset("tatsu-lab/alpaca", split="train")
+    before = len(all_data)
+    for row in list(ds)[:10000]:  # cap at 10K to not overwhelm
+        text = row.get("instruction", "") or ""
+        inp = row.get("input", "")
+        if inp:
+            text = f"{text}\n{inp}"
+        if text.strip():
+            all_data.append(to_sg(text.strip(), "benign"))
+    print(f"  alpaca benign: +{len(all_data)-before}")
+except Exception as e:
+    print(f"  alpaca: {e}")
+
+
+# ---------------------------------------------------------------------------
+# 7. Dedup + balanced split
 # ---------------------------------------------------------------------------
 
 all_data = dedup(all_data)
