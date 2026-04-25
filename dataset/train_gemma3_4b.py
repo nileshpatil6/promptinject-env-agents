@@ -294,7 +294,7 @@ random.shuffle(balanced)
 
 task_examples = []
 
-# easy + medium: full message (no truncation, messages are <500 chars), 20x
+# easy + medium: full message (no truncation, messages are <500 chars), 40x injection / 20x benign
 for task_file in ["easy.json", "medium.json"]:
     path = os.path.join(SERVER_DATA_DIR, task_file)
     if not os.path.exists(path):
@@ -314,7 +314,8 @@ for task_file in ["easy.json", "medium.json"]:
             expl = _INJECTION_EXPLANATIONS.get(attack_type or "direct", "")
         else:
             expl = random.choice(_BENIGN_EXPLANATIONS)
-        for _ in range(20):
+        repeats = 40 if label == "injection" else 20
+        for _ in range(repeats):
             task_examples.append({
                 "messages": [
                     {"role": "user", "content": f"{SYSTEM_PROMPT}\n\nAnalyze:\n{msg}"},
@@ -354,11 +355,11 @@ if os.path.exists(hard_path):
                 label = "injection"
                 expl = (f"Social engineering injection detected. Attack occurs at turn {attack_turn}. "
                         f"Patterns: {', '.join(repr(k) for k in pattern_keywords[:4])}.")
-                repeats = 20
+                repeats = 40
             else:
                 label = "benign"
                 expl = "Conversation appears benign. No injection patterns detected yet."
-                repeats = 10
+                repeats = 20
             for _ in range(repeats):
                 task_examples.append({
                     "messages": [
@@ -374,7 +375,7 @@ if os.path.exists(hard_path):
                 })
     print(f"  task/hard.json: +{len(task_examples)-before}")
 
-# indirect: exact inference format, 20x
+# indirect: exact inference format, 40x injection / 20x benign
 indirect_path = os.path.join(SERVER_DATA_DIR, "indirect.json")
 if os.path.exists(indirect_path):
     with open(indirect_path, encoding="utf-8") as f:
@@ -398,7 +399,8 @@ if os.path.exists(indirect_path):
             expl = f"Clean {tool_name.replace('_', ' ')} output. No injection patterns detected."
         else:
             expl = _INJECTION_EXPLANATIONS["indirect"]
-        for _ in range(20):
+        repeats = 40 if label == "injection" else 20
+        for _ in range(repeats):
             task_examples.append({
                 "messages": [
                     {"role": "user", "content": f"{SYSTEM_PROMPT}\n\nAnalyze:\n{text}"},
@@ -413,7 +415,7 @@ if os.path.exists(indirect_path):
             })
     print(f"  task/indirect.json: +{len(task_examples)-before}")
 
-# pipeline: each stage, 20x injection / 10x benign
+# pipeline: each stage, 40x injection / 20x benign
 pipeline_path = os.path.join(SERVER_DATA_DIR, "pipeline.json")
 if os.path.exists(pipeline_path):
     with open(pipeline_path, encoding="utf-8") as f:
@@ -430,11 +432,11 @@ if os.path.exists(pipeline_path):
                 label = "injection"
                 expl = (f"Prompt injection in pipeline stage {stage} ({stage_name}). "
                         f"Malicious instructions embedded in content attempting to hijack AI behavior.")
-                repeats = 20
+                repeats = 40
             else:
                 label = "benign"
                 expl = f"Clean pipeline stage {stage} ({stage_name}). No injection patterns detected."
-                repeats = 10
+                repeats = 20
             for _ in range(repeats):
                 task_examples.append({
                     "messages": [
@@ -450,7 +452,7 @@ if os.path.exists(pipeline_path):
                 })
     print(f"  task/pipeline.json: +{len(task_examples)-before}")
 
-print(f"Total task-specific examples (20x, post-balance): {len(task_examples)}")
+print(f"Total task-specific examples (40x inj / 20x benign, post-balance): {len(task_examples)}")
 balanced = balanced + task_examples
 random.shuffle(balanced)
 
@@ -520,7 +522,7 @@ val_ds   = Dataset.from_list(load_jsonl(os.path.join(OUTPUT_DIR, "val.jsonl"))).
 
 training_args = SFTConfig(
     output_dir=OUTPUT_DIR,
-    num_train_epochs=2,
+    num_train_epochs=3,
     per_device_train_batch_size=8,
     per_device_eval_batch_size=8,
     gradient_accumulation_steps=2,
