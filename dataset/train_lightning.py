@@ -126,7 +126,7 @@ torch.cuda.empty_cache()
 model = AutoModelForCausalLM.from_pretrained(
     MODEL_ID,
     quantization_config=bnb_config,
-    device_map={"": 0},
+    device_map="auto",
     token=HF_TOKEN,
 )
 model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
