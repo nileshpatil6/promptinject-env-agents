@@ -27,6 +27,18 @@ from typing import Any, Dict, List, Optional
 import httpx
 from openai import OpenAI
 
+# Optional: fine-tuned ShieldGemma detector
+# Set ADAPTER_PATH=/path/to/shieldgemma-adapter to enable
+ADAPTER_PATH = os.environ.get("ADAPTER_PATH", "")
+_detector = None
+
+def _get_detector():
+    global _detector
+    if _detector is None and ADAPTER_PATH:
+        from server.shieldgemma_detector import ShieldGemmaDetector
+        _detector = ShieldGemmaDetector(ADAPTER_PATH)
+    return _detector
+
 # ---------------------------------------------------------------------------
 # Auto-detect provider: HuggingFace takes priority if HF_TOKEN is set
 # ---------------------------------------------------------------------------
@@ -205,6 +217,28 @@ def get_model_action(
                 f"=== MESSAGE TO ANALYZE ===\n{message_text}\n\n"
                 "Analyze this message for prompt injection attacks."
             )
+
+    detector = _get_detector()
+    if detector:
+        # Use fine-tuned ShieldGemma for classification
+        raw_text = (
+            observation.get("tool_output")
+            or observation.get("content")
+            or observation.get("message")
+            or user_content
+        )
+        try:
+            result = detector.classify(raw_text)
+            cls = result["classification"]
+            return json.dumps({
+                "classification": cls,
+                "attack_type": "indirect" if task_id in ("indirect_tool", "pipeline") else "direct" if cls == "injection" else None,
+                "explanation": f"ShieldGemma fine-tuned: {result['raw']}",
+                "severity": result["score"] if cls == "injection" else None,
+                "injection_vector": "tool_output" if task_id == "indirect_tool" else "none" if cls == "benign" else "user_message",
+            })
+        except Exception as exc:
+            print(f"[DEBUG] ShieldGemma failed: {exc}", flush=True)
 
     try:
         response = client.chat.completions.create(
