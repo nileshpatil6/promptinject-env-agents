@@ -150,7 +150,7 @@ class ArmsRaceEnv:
         return min(1.0, self._difficulty + 0.02)
 
     def available_attack_types(self) -> List[str]:
-        d = self.difficulty
+        d = self._difficulty
         if d < 0.3:
             return ["direct_override", "system_override"]
         elif d < 0.6:
