@@ -231,7 +231,7 @@ def run_task(http: httpx.Client, task_id: str) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    print(f"[DEBUG] Model=Gemma3-1B adapter={ADAPTER_PATH}", flush=True)
+    print(f"[DEBUG] Model={MODEL_NAME} adapter={ADAPTER_PATH}", flush=True)
     print(f"[DEBUG] ENV_BASE_URL={ENV_BASE_URL}", flush=True)
 
     print("[DEBUG] Loading Gemma 3 1B detector...", flush=True)
