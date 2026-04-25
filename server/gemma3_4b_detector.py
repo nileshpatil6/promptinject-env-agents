@@ -50,12 +50,12 @@ class Gemma3_4BDetector:
     def classify(self, text: str, task_id: str = "easy") -> dict:
         injection_vector_hint = "tool_output" if task_id in ("indirect_tool", "pipeline") else "user_message"
 
-        messages = [{"role": "user", "content": f"{SYSTEM_PROMPT}\n\nAnalyze:\n{text[:800]}"}]
+        messages = [{"role": "user", "content": f"{SYSTEM_PROMPT}\n\nAnalyze:\n{text[:2000]}"}]
         prompt = self.tokenizer.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )
         inputs = self.tokenizer(
-            prompt, return_tensors="pt", truncation=True, max_length=512
+            prompt, return_tensors="pt", truncation=True, max_length=1024
         ).to(self.model.device)
 
         with torch.no_grad():

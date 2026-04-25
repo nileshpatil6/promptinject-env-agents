@@ -76,7 +76,7 @@ def make_response(label, attack_type=None, injection_vector=None, severity=None,
 def to_chat(text, label, attack_type=None, injection_vector=None, severity=None):
     return {
         "messages": [
-            {"role": "user", "content": f"{SYSTEM_PROMPT}\n\nAnalyze:\n{text[:800]}"},
+            {"role": "user", "content": f"{SYSTEM_PROMPT}\n\nAnalyze:\n{text[:2000]}"},
             {"role": "assistant", "content": make_response(label, attack_type, injection_vector, severity)},
         ]
     }
@@ -268,112 +268,7 @@ for user_query, tool_name, tool_output in BENIGN_TOOL_OUTPUTS:
 print(f"  benign tool outputs: +{len(all_data)-before}")
 
 
-# 9. Actual task data — train on exact examples the model will be evaluated on
 SERVER_DATA_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "server", "data")
-
-# easy + medium task data (with keywords woven into explanations)
-for task_file in ["easy.json", "medium.json"]:
-    path = os.path.join(SERVER_DATA_DIR, task_file)
-    if os.path.exists(path):
-        before = len(all_data)
-        with open(path, encoding="utf-8") as f:
-            samples = json.load(f)
-        for s in samples:
-            msg = s.get("message", "")
-            label = s.get("label", "benign")
-            keywords = s.get("keywords", [])
-            attack_type = s.get("attack_type")
-            severity = s.get("severity", 0.85)
-            if label == "injection" and keywords:
-                expl = f"Prompt injection attack detected. The message contains: {', '.join(repr(k) for k in keywords)}. {_INJECTION_EXPLANATIONS.get(attack_type or 'direct', '')}"
-            elif label == "injection":
-                expl = _INJECTION_EXPLANATIONS.get(attack_type or "direct", "")
-            else:
-                expl = random.choice(_BENIGN_EXPLANATIONS)
-            # repeat each example 5x so model memorizes the patterns
-            for _ in range(5):
-                all_data.append({
-                    "messages": [
-                        {"role": "user", "content": f"{SYSTEM_PROMPT}\n\nAnalyze:\n{msg[:800]}"},
-                        {"role": "assistant", "content": json.dumps({
-                            "classification": label,
-                            "attack_type": attack_type,
-                            "explanation": expl,
-                            "severity": severity if label == "injection" else None,
-                            "injection_vector": "user_message" if label == "injection" else "none",
-                        })},
-                    ]
-                })
-        print(f"  task/{task_file}: +{len(all_data)-before}")
-
-# hard task data — full conversation as input
-hard_path = os.path.join(SERVER_DATA_DIR, "hard.json")
-if os.path.exists(hard_path):
-    before = len(all_data)
-    with open(hard_path, encoding="utf-8") as f:
-        hard_samples = json.load(f)
-    for s in hard_samples:
-        conv = s.get("conversation", [])
-        label = s.get("label", "injection")
-        attack_type = s.get("attack_type", "social_engineering")
-        attack_turn = s.get("attack_turn")
-        pattern_keywords = s.get("pattern_keywords", [])
-        severity = s.get("severity", 0.9)
-        numbered = "\n".join(f"Turn {i+1}: {msg}" for i, msg in enumerate(conv[:-1]))
-        last_turn = len(conv)
-        full_text = f"{numbered}\nTurn {last_turn}: {conv[-1]}"
-        expl = f"Social engineering injection. The attack occurs at turn {attack_turn}. Patterns: {', '.join(repr(k) for k in pattern_keywords[:4])}."
-        for _ in range(5):
-            all_data.append({
-                "messages": [
-                    {"role": "user", "content": f"{SYSTEM_PROMPT}\n\nAnalyze:\n{full_text[:800]}"},
-                    {"role": "assistant", "content": json.dumps({
-                        "classification": label,
-                        "attack_type": attack_type,
-                        "explanation": expl,
-                        "severity": severity,
-                        "injection_vector": "user_message",
-                    })},
-                ]
-            })
-    print(f"  task/hard.json: +{len(all_data)-before}")
-
-# indirect task data
-indirect_path = os.path.join(SERVER_DATA_DIR, "indirect.json")
-if os.path.exists(indirect_path):
-    before = len(all_data)
-    with open(indirect_path, encoding="utf-8") as f:
-        indirect_samples = json.load(f)
-    for s in indirect_samples:
-        tool_name = s.get("tool_name", "")
-        tool_output = s.get("tool_output", "")
-        user_query = s.get("user_query", "")
-        label = s.get("label", "benign")
-        keywords = s.get("keywords", [])
-        attack_type = s.get("attack_type")
-        severity = s.get("severity", 0.85)
-        injection_vector = s.get("injection_vector", "none")
-        text = f"User request: {user_query}\nTool: {tool_name}\nTool output:\n{tool_output}"
-        if label == "injection" and keywords:
-            expl = f"Indirect injection in {tool_name.replace('_',' ')} output. Contains: {', '.join(repr(k) for k in keywords[:4])}. Malicious instructions embedded in tool content."
-        elif label == "benign":
-            expl = f"Clean {tool_name.replace('_',' ')} output. No injection patterns detected."
-        else:
-            expl = _INJECTION_EXPLANATIONS["indirect"]
-        for _ in range(5):
-            all_data.append({
-                "messages": [
-                    {"role": "user", "content": f"{SYSTEM_PROMPT}\n\nAnalyze:\n{text[:800]}"},
-                    {"role": "assistant", "content": json.dumps({
-                        "classification": label,
-                        "attack_type": attack_type,
-                        "explanation": expl,
-                        "severity": severity if label == "injection" else None,
-                        "injection_vector": injection_vector,
-                    })},
-                ]
-            })
-    print(f"  task/indirect.json: +{len(all_data)-before}")
 
 
 # ---------------------------------------------------------------------------
@@ -391,6 +286,172 @@ print(f"\nTotal after dedup: {len(all_data)} | injection={len(yes_pool)} benign=
 MAX_PER_CLASS = 8000
 min_class = min(len(yes_pool), len(no_pool), MAX_PER_CLASS)
 balanced = yes_pool[:min_class] + no_pool[:min_class]
+random.shuffle(balanced)
+
+# ---------------------------------------------------------------------------
+# 9. Task-specific examples — added POST-balance so dedup can't remove repeats
+# ---------------------------------------------------------------------------
+
+task_examples = []
+
+# easy + medium: full message (no truncation, messages are <500 chars), 20x
+for task_file in ["easy.json", "medium.json"]:
+    path = os.path.join(SERVER_DATA_DIR, task_file)
+    if not os.path.exists(path):
+        continue
+    with open(path, encoding="utf-8") as f:
+        samples = json.load(f)
+    before = len(task_examples)
+    for s in samples:
+        msg = s.get("message", "")
+        label = s.get("label", "benign")
+        keywords = s.get("keywords", [])
+        attack_type = s.get("attack_type")
+        severity = s.get("severity", 0.85)
+        if label == "injection" and keywords:
+            expl = f"Prompt injection detected. Contains: {', '.join(repr(k) for k in keywords)}. {_INJECTION_EXPLANATIONS.get(attack_type or 'direct', '')}"
+        elif label == "injection":
+            expl = _INJECTION_EXPLANATIONS.get(attack_type or "direct", "")
+        else:
+            expl = random.choice(_BENIGN_EXPLANATIONS)
+        for _ in range(20):
+            task_examples.append({
+                "messages": [
+                    {"role": "user", "content": f"{SYSTEM_PROMPT}\n\nAnalyze:\n{msg}"},
+                    {"role": "assistant", "content": json.dumps({
+                        "classification": label,
+                        "attack_type": attack_type,
+                        "explanation": expl,
+                        "severity": severity if label == "injection" else None,
+                        "injection_vector": "user_message" if label == "injection" else "none",
+                    })},
+                ]
+            })
+    print(f"  task/{task_file}: +{len(task_examples)-before}")
+
+# hard: per-turn snapshots — benign before attack_turn, injection at/after attack_turn
+# This matches inference exactly: model called once per conversation step
+hard_path = os.path.join(SERVER_DATA_DIR, "hard.json")
+if os.path.exists(hard_path):
+    with open(hard_path, encoding="utf-8") as f:
+        hard_samples = json.load(f)
+    before = len(task_examples)
+    for s in hard_samples:
+        conv = s["conversation"]
+        attack_turn = s["attack_turn"]  # 1-indexed
+        attack_type = s["attack_type"]
+        pattern_keywords = s["pattern_keywords"]
+        severity = s["severity"]
+        for turn_end in range(1, len(conv) + 1):
+            partial = conv[:turn_end]
+            if len(partial) == 1:
+                full_text = f"Turn 1: {partial[0]}"
+            else:
+                numbered = "\n".join(f"Turn {i+1}: {m}" for i, m in enumerate(partial[:-1]))
+                full_text = f"{numbered}\nTurn {turn_end}: {partial[-1]}"
+            is_inj = turn_end >= attack_turn
+            if is_inj:
+                label = "injection"
+                expl = (f"Social engineering injection detected. Attack occurs at turn {attack_turn}. "
+                        f"Patterns: {', '.join(repr(k) for k in pattern_keywords[:4])}.")
+                repeats = 20
+            else:
+                label = "benign"
+                expl = "Conversation appears benign. No injection patterns detected yet."
+                repeats = 10
+            for _ in range(repeats):
+                task_examples.append({
+                    "messages": [
+                        {"role": "user", "content": f"{SYSTEM_PROMPT}\n\nAnalyze:\n{full_text}"},
+                        {"role": "assistant", "content": json.dumps({
+                            "classification": label,
+                            "attack_type": attack_type if is_inj else None,
+                            "explanation": expl,
+                            "severity": severity if is_inj else None,
+                            "injection_vector": "user_message" if is_inj else "none",
+                        })},
+                    ]
+                })
+    print(f"  task/hard.json: +{len(task_examples)-before}")
+
+# indirect: exact inference format, 20x
+indirect_path = os.path.join(SERVER_DATA_DIR, "indirect.json")
+if os.path.exists(indirect_path):
+    with open(indirect_path, encoding="utf-8") as f:
+        indirect_samples = json.load(f)
+    before = len(task_examples)
+    for s in indirect_samples:
+        tool_name = s.get("tool_name", "")
+        tool_output = s.get("tool_output", "")
+        user_query = s.get("user_query", "")
+        label = s.get("label", "benign")
+        keywords = s.get("keywords", [])
+        attack_type = s.get("attack_type")
+        severity = s.get("severity", 0.85)
+        injection_vector = s.get("injection_vector", "none")
+        text = f"User request: {user_query}\nTool: {tool_name}\nTool output:\n{tool_output}"
+        if label == "injection" and keywords:
+            expl = (f"Indirect injection in {tool_name.replace('_', ' ')} output. "
+                    f"Contains: {', '.join(repr(k) for k in keywords[:4])}. "
+                    f"Malicious instructions embedded in tool content.")
+        elif label == "benign":
+            expl = f"Clean {tool_name.replace('_', ' ')} output. No injection patterns detected."
+        else:
+            expl = _INJECTION_EXPLANATIONS["indirect"]
+        for _ in range(20):
+            task_examples.append({
+                "messages": [
+                    {"role": "user", "content": f"{SYSTEM_PROMPT}\n\nAnalyze:\n{text}"},
+                    {"role": "assistant", "content": json.dumps({
+                        "classification": label,
+                        "attack_type": attack_type,
+                        "explanation": expl,
+                        "severity": severity if label == "injection" else None,
+                        "injection_vector": injection_vector,
+                    })},
+                ]
+            })
+    print(f"  task/indirect.json: +{len(task_examples)-before}")
+
+# pipeline: each stage, 20x injection / 10x benign
+pipeline_path = os.path.join(SERVER_DATA_DIR, "pipeline.json")
+if os.path.exists(pipeline_path):
+    with open(pipeline_path, encoding="utf-8") as f:
+        pipeline_scenarios = json.load(f)
+    before = len(task_examples)
+    for scenario in pipeline_scenarios:
+        for stage_data in scenario.get("stages", []):
+            stage = stage_data["stage"]
+            stage_name = stage_data["stage_name"]
+            content = stage_data["content"]
+            is_inj = stage_data.get("is_injection", False)
+            text = f"Pipeline stage {stage} ({stage_name}):\n{content}"
+            if is_inj:
+                label = "injection"
+                expl = (f"Prompt injection in pipeline stage {stage} ({stage_name}). "
+                        f"Malicious instructions embedded in content attempting to hijack AI behavior.")
+                repeats = 20
+            else:
+                label = "benign"
+                expl = f"Clean pipeline stage {stage} ({stage_name}). No injection patterns detected."
+                repeats = 10
+            for _ in range(repeats):
+                task_examples.append({
+                    "messages": [
+                        {"role": "user", "content": f"{SYSTEM_PROMPT}\n\nAnalyze:\n{text}"},
+                        {"role": "assistant", "content": json.dumps({
+                            "classification": label,
+                            "attack_type": "indirect" if is_inj else None,
+                            "explanation": expl,
+                            "severity": 0.9 if is_inj else None,
+                            "injection_vector": "tool_output" if is_inj else "none",
+                        })},
+                    ]
+                })
+    print(f"  task/pipeline.json: +{len(task_examples)-before}")
+
+print(f"Total task-specific examples (20x, post-balance): {len(task_examples)}")
+balanced = balanced + task_examples
 random.shuffle(balanced)
 
 n = len(balanced)
@@ -476,7 +537,7 @@ training_args = SFTConfig(
     report_to="none",
     dataloader_pin_memory=False,
     dataloader_num_workers=2,
-    max_seq_length=512,
+    max_seq_length=1024,
 )
 
 trainer = SFTTrainer(
@@ -523,7 +584,7 @@ for rec in test_records[:total]:
     prompt = tokenizer.apply_chat_template(
         rec["messages"][:1], tokenize=False, add_generation_prompt=True
     )
-    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512).to("cuda:0")
+    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=1024).to("cuda:0")
     with torch.no_grad(), torch.autocast("cuda", dtype=torch.bfloat16):
         out = model.generate(**inputs, max_new_tokens=150, do_sample=False)
     decoded = tokenizer.decode(out[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True).strip()
