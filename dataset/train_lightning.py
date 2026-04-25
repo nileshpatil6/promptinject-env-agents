@@ -161,8 +161,9 @@ yes_pool = [e for e in all_data if e["text"].strip().endswith("Yes")]
 no_pool  = [e for e in all_data if e["text"].strip().endswith("No")]
 print(f"\nTotal after dedup: {len(all_data)} | injection={len(yes_pool)} benign={len(no_pool)}")
 
-# Balance injection/benign then 80/10/10 split
-min_class = min(len(yes_pool), len(no_pool))
+# Cap at 4000 per class — diverse data > quantity, keeps training ~15-20 min on A100
+MAX_PER_CLASS = 4000
+min_class = min(len(yes_pool), len(no_pool), MAX_PER_CLASS)
 balanced = yes_pool[:min_class] + no_pool[:min_class]
 random.shuffle(balanced)
 
@@ -208,10 +209,9 @@ model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
 model.config.use_cache = False
 print(f"Model loaded. VRAM used: {torch.cuda.memory_allocated()/1e9:.1f} GB")
 
-# r=32 for larger dataset
 lora_config = LoraConfig(
-    r=32,
-    lora_alpha=64,
+    r=16,
+    lora_alpha=32,
     target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],
     lora_dropout=0.05,
     bias="none",
@@ -230,19 +230,19 @@ val_ds   = Dataset.from_list(load_jsonl(os.path.join(OUTPUT_DIR, "val.jsonl")))
 
 training_args = SFTConfig(
     output_dir=OUTPUT_DIR,
-    num_train_epochs=3,
-    per_device_train_batch_size=8,
-    per_device_eval_batch_size=8,
-    gradient_accumulation_steps=2,
+    num_train_epochs=1,
+    per_device_train_batch_size=16,
+    per_device_eval_batch_size=16,
+    gradient_accumulation_steps=1,
     gradient_checkpointing=True,
-    learning_rate=1e-4,
+    learning_rate=2e-4,
     fp16=False,
-    bf16=False,
-    logging_steps=50,
+    bf16=True,
+    logging_steps=25,
     eval_strategy="epoch",
     save_strategy="epoch",
     load_best_model_at_end=True,
-    warmup_steps=100,
+    warmup_steps=50,
     lr_scheduler_type="cosine",
     report_to="none",
     dataloader_pin_memory=False,
@@ -258,7 +258,7 @@ trainer = SFTTrainer(
 )
 
 steps = len(train_ds) // (training_args.per_device_train_batch_size * training_args.gradient_accumulation_steps)
-print(f"Steps per epoch: {steps}  |  Total steps: {steps * 3}")
+print(f"Steps per epoch: {steps}  |  Total steps: {steps * training_args.num_train_epochs}")
 print("Starting training...")
 trainer.train()
 print("Training complete!")
