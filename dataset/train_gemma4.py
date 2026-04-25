@@ -13,8 +13,8 @@ os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 import torch
 from datasets import load_dataset, Dataset
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from peft import LoraConfig, get_peft_model
 from trl import SFTConfig, SFTTrainer
 
 HF_TOKEN = os.environ.get("HF_TOKEN", "")
@@ -251,26 +251,20 @@ print(f"train: {len(train_data)} | val: {len(val_data)} | test: {len(test_data)}
 
 MODEL_ID = "google/gemma-4-E2B-it"
 
-bnb_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.bfloat16,
-    bnb_4bit_use_double_quant=True,
-)
-
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, token=HF_TOKEN)
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
 tokenizer.padding_side = "right"
 
 torch.cuda.empty_cache()
+# Load in bfloat16 — A100 has 42GB, no need for 4-bit quantization
+# (Gemma4ClippableLinear breaks QLoRA in older peft versions)
 model = AutoModelForCausalLM.from_pretrained(
     MODEL_ID,
-    quantization_config=bnb_config,
+    torch_dtype=torch.bfloat16,
     device_map="auto",
     token=HF_TOKEN,
 )
-model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
 model.config.use_cache = False
 print(f"Model loaded. VRAM used: {torch.cuda.memory_allocated()/1e9:.1f} GB")
 
