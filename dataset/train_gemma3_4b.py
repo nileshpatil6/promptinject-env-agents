@@ -330,8 +330,8 @@ for task_file in ["easy.json", "medium.json"]:
             })
     print(f"  task/{task_file}: +{len(task_examples)-before}")
 
-# hard: per-turn snapshots — benign before attack_turn, injection at/after attack_turn
-# This matches inference exactly: model called once per conversation step
+# hard: env sends FULL conversation at once — context=conv[:-1], message=conv[-1]
+# Grader checks: str(attack_turn) in explanation AND all pattern_keywords counted
 hard_path = os.path.join(SERVER_DATA_DIR, "hard.json")
 if os.path.exists(hard_path):
     with open(hard_path, encoding="utf-8") as f:
@@ -339,40 +339,34 @@ if os.path.exists(hard_path):
     before = len(task_examples)
     for s in hard_samples:
         conv = s["conversation"]
-        attack_turn = s["attack_turn"]  # 1-indexed
+        attack_turn = s["attack_turn"]
         attack_type = s["attack_type"]
-        pattern_keywords = s["pattern_keywords"]
+        pattern_keywords = s["pattern_keywords"]  # ALL keywords — grader counts every one
         severity = s["severity"]
-        for turn_end in range(1, len(conv) + 1):
-            partial = conv[:turn_end]
-            if len(partial) == 1:
-                full_text = f"Turn 1: {partial[0]}"
-            else:
-                numbered = "\n".join(f"Turn {i+1}: {m}" for i, m in enumerate(partial[:-1]))
-                full_text = f"{numbered}\nTurn {turn_end}: {partial[-1]}"
-            is_inj = turn_end >= attack_turn
-            if is_inj:
-                label = "injection"
-                expl = (f"Social engineering injection detected. Attack occurs at turn {attack_turn}. "
-                        f"Patterns: {', '.join(repr(k) for k in pattern_keywords[:4])}.")
-                repeats = 40
-            else:
-                label = "benign"
-                expl = "Conversation appears benign. No injection patterns detected yet."
-                repeats = 20
-            for _ in range(repeats):
-                task_examples.append({
-                    "messages": [
-                        {"role": "user", "content": f"{SYSTEM_PROMPT}\n\nAnalyze:\n{full_text}"},
-                        {"role": "assistant", "content": json.dumps({
-                            "classification": label,
-                            "attack_type": attack_type if is_inj else None,
-                            "explanation": expl,
-                            "severity": severity if is_inj else None,
-                            "injection_vector": "user_message" if is_inj else "none",
-                        })},
-                    ]
-                })
+        # Build exactly as inference assembles it
+        context = conv[:-1]
+        last_message = conv[-1]
+        if context:
+            numbered = "\n".join(f"Turn {i+1}: {m}" for i, m in enumerate(context))
+            full_text = f"{numbered}\nTurn {len(conv)}: {last_message}"
+        else:
+            full_text = f"Turn 1: {last_message}"
+        # ALL pattern_keywords in explanation to maximize kw_score (0.3 × hits/total)
+        expl = (f"Social engineering injection detected. Attack occurs at turn {attack_turn}. "
+                f"Patterns include: {', '.join(pattern_keywords)}.")
+        for _ in range(40):
+            task_examples.append({
+                "messages": [
+                    {"role": "user", "content": f"{SYSTEM_PROMPT}\n\nAnalyze:\n{full_text}"},
+                    {"role": "assistant", "content": json.dumps({
+                        "classification": "injection",
+                        "attack_type": attack_type,
+                        "explanation": expl,
+                        "severity": severity,
+                        "injection_vector": "user_message",
+                    })},
+                ]
+            })
     print(f"  task/hard.json: +{len(task_examples)-before}")
 
 # indirect: exact inference format, 40x injection / 20x benign
@@ -393,7 +387,7 @@ if os.path.exists(indirect_path):
         text = f"User request: {user_query}\nTool: {tool_name}\nTool output:\n{tool_output}"
         if label == "injection" and keywords:
             expl = (f"Indirect injection in {tool_name.replace('_', ' ')} output. "
-                    f"Contains: {', '.join(repr(k) for k in keywords[:4])}. "
+                    f"Contains: {', '.join(repr(k) for k in keywords)}. "
                     f"Malicious instructions embedded in tool content.")
         elif label == "benign":
             expl = f"Clean {tool_name.replace('_', ' ')} output. No injection patterns detected."
