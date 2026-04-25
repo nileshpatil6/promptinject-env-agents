@@ -285,6 +285,9 @@ model.eval()
 model.config.use_cache = False
 torch.cuda.empty_cache()
 
+yes_id = tokenizer.encode("Yes", add_special_tokens=False)[0]
+no_id  = tokenizer.encode("No",  add_special_tokens=False)[0]
+
 test_records = load_jsonl(os.path.join(OUTPUT_DIR, "test.jsonl"))
 correct, total = 0, min(200, len(test_records))
 
@@ -296,10 +299,11 @@ for rec in test_records[:total]:
         prompt, true_label = full.rsplit("\nNo", 1)[0], "No"
 
     inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512).to("cuda:0")
-    with torch.no_grad(), torch.autocast("cuda", dtype=torch.bfloat16):
-        out = model.generate(**inputs, max_new_tokens=5, do_sample=False)
-    pred = tokenizer.decode(out[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True).strip()
-    if ("Yes" if pred.startswith("Yes") else "No") == true_label:
+    with torch.no_grad():
+        logits = model(**inputs).logits
+    last = logits[0, -1, :]
+    pred = "Yes" if last[yes_id].item() > last[no_id].item() else "No"
+    if pred == true_label:
         correct += 1
 
 print(f"Test accuracy: {correct}/{total} = {correct/total:.3f}")
