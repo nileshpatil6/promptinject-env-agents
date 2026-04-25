@@ -27,16 +27,16 @@ from typing import Any, Dict, List, Optional
 import httpx
 from openai import OpenAI
 
-# Optional: fine-tuned ShieldGemma detector
-# Set ADAPTER_PATH=/path/to/shieldgemma-adapter to enable
+# Optional: fine-tuned Gemma4 detector
+# Set ADAPTER_PATH=/path/to/gemma4-lora to enable
 ADAPTER_PATH = os.environ.get("ADAPTER_PATH", "")
 _detector = None
 
 def _get_detector():
     global _detector
     if _detector is None and ADAPTER_PATH:
-        from server.shieldgemma_detector import ShieldGemmaDetector
-        _detector = ShieldGemmaDetector(ADAPTER_PATH)
+        from server.gemma4_detector import Gemma4Detector
+        _detector = Gemma4Detector(ADAPTER_PATH)
     return _detector
 
 # ---------------------------------------------------------------------------
@@ -233,7 +233,7 @@ def get_model_action(
     except Exception as exc:
         print(f"[DEBUG] LLM call failed: {exc}", flush=True)
 
-    # Fallback: fine-tuned ShieldGemma (when LLM unavailable)
+    # Fallback: fine-tuned Gemma4 (when LLM unavailable)
     detector = _get_detector()
     if detector:
         raw_text = (
@@ -243,17 +243,10 @@ def get_model_action(
             or user_content
         )
         try:
-            result = detector.classify(raw_text)
-            cls = result["classification"]
-            return json.dumps({
-                "classification": cls,
-                "attack_type": "indirect" if task_id in ("indirect_tool", "pipeline") else "direct" if cls == "injection" else None,
-                "explanation": f"ShieldGemma fine-tuned: {result['raw']}",
-                "severity": result["score"] if cls == "injection" else None,
-                "injection_vector": "tool_output" if task_id == "indirect_tool" else "none" if cls == "benign" else "user_message",
-            })
+            result = detector.classify(raw_text, task_id=task_id)
+            return json.dumps(result)
         except Exception as exc:
-            print(f"[DEBUG] ShieldGemma failed: {exc}", flush=True)
+            print(f"[DEBUG] Gemma4 failed: {exc}", flush=True)
 
     # Last resort default
     return json.dumps({
