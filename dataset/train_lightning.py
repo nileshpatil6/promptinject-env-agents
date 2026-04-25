@@ -296,7 +296,7 @@ for rec in test_records[:total]:
         prompt, true_label = full.rsplit("\nNo", 1)[0], "No"
 
     inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512).to("cuda:0")
-    with torch.no_grad():
+    with torch.no_grad(), torch.autocast("cuda", dtype=torch.bfloat16):
         out = model.generate(**inputs, max_new_tokens=5, do_sample=False)
     pred = tokenizer.decode(out[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True).strip()
     if ("Yes" if pred.startswith("Yes") else "No") == true_label:
