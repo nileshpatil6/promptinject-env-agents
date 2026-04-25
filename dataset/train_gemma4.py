@@ -261,7 +261,7 @@ torch.cuda.empty_cache()
 # (Gemma4ClippableLinear breaks QLoRA in older peft versions)
 model = AutoModelForCausalLM.from_pretrained(
     MODEL_ID,
-    torch_dtype=torch.bfloat16,
+    dtype=torch.bfloat16,
     device_map="auto",
     token=HF_TOKEN,
 )
@@ -271,7 +271,7 @@ print(f"Model loaded. VRAM used: {torch.cuda.memory_allocated()/1e9:.1f} GB")
 lora_config = LoraConfig(
     r=16,
     lora_alpha=32,
-    target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],
+    target_modules=["q_proj.linear", "v_proj.linear", "k_proj.linear", "o_proj.linear"],
     lora_dropout=0.05,
     bias="none",
     task_type="CAUSAL_LM",
