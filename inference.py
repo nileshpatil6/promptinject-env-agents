@@ -302,22 +302,37 @@ def env_reset(http: httpx.Client, task_id: str) -> Dict[str, Any]:
     return resp.json()
 
 
+def _sanitize_json(text: str) -> str:
+    import re
+    # Remove invalid JSON escape sequences like \' \q etc — keep only valid ones
+    text = re.sub(r"\\(?![\"\\\/bfnrtu])", "", text)
+    return text
+
+
 def env_step(http: httpx.Client, action_json: str) -> Dict[str, Any]:
-    try:
-        action_data = json.loads(action_json)
-    except json.JSONDecodeError:
-        import re
-        match = re.search(r'\{.*\}', action_json, re.DOTALL)
-        if match:
-            action_data = json.loads(match.group())
-        else:
-            action_data = {
-                "classification": "benign",
-                "attack_type": None,
-                "explanation": "Failed to parse model response",
-                "severity": None,
-                "injection_vector": None,
-            }
+    import re
+    _default = {
+        "classification": "benign",
+        "attack_type": None,
+        "explanation": "Failed to parse model response",
+        "severity": None,
+        "injection_vector": None,
+    }
+    action_data = None
+    for candidate in [action_json, _sanitize_json(action_json)]:
+        try:
+            action_data = json.loads(candidate)
+            break
+        except json.JSONDecodeError:
+            match = re.search(r'\{.*\}', candidate, re.DOTALL)
+            if match:
+                try:
+                    action_data = json.loads(match.group())
+                    break
+                except json.JSONDecodeError:
+                    pass
+    if action_data is None:
+        action_data = _default
 
     resp = http.post("/step", json=action_data, timeout=30)
     resp.raise_for_status()
