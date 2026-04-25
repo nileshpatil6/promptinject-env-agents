@@ -135,17 +135,21 @@ try:
 except Exception as e:
     print(f"  deepset: {e}")
 
-# 4. BIPIA
+# 4. BIPIA — cap at 3K to avoid dominating injection pool
 try:
     ds = load_dataset("MAlmasabi/Indirect-Prompt-Injection-BIPIA-GPT", split="train")
     before = len(all_data)
+    bipia_count = 0
     for row in ds:
+        if bipia_count >= 3000:
+            break
         attack = row.get("attack_str") or row.get("malicious_instruction") or ""
         context = row.get("context") or row.get("task_context") or ""
         text = f"{context}\n\n{attack}".strip() if context else attack
         if text:
             all_data.append(to_chat(text, "injection",
                 attack_type="indirect", injection_vector="tool_output", severity=0.8))
+            bipia_count += 1
     print(f"  bipia: +{len(all_data)-before}")
 except Exception as e:
     print(f"  bipia: {e}")
@@ -188,7 +192,7 @@ except Exception as e:
 try:
     ds = load_dataset("tatsu-lab/alpaca", split="train")
     before = len(all_data)
-    for row in list(ds)[:10000]:
+    for row in list(ds)[:5000]:
         text = row.get("instruction", "") or ""
         inp = row.get("input", "")
         if inp:
@@ -212,7 +216,8 @@ yes_pool = [e for e in all_data if json.loads(e["messages"][1]["content"])["clas
 no_pool  = [e for e in all_data if json.loads(e["messages"][1]["content"])["classification"] == "benign"]
 print(f"\nTotal after dedup: {len(all_data)} | injection={len(yes_pool)} benign={len(no_pool)}")
 
-min_class = min(len(yes_pool), len(no_pool))
+MAX_PER_CLASS = 8000
+min_class = min(len(yes_pool), len(no_pool), MAX_PER_CLASS)
 balanced = yes_pool[:min_class] + no_pool[:min_class]
 random.shuffle(balanced)
 
@@ -282,7 +287,7 @@ val_ds   = Dataset.from_list(load_jsonl(os.path.join(OUTPUT_DIR, "val.jsonl"))).
 
 training_args = SFTConfig(
     output_dir=OUTPUT_DIR,
-    num_train_epochs=3,
+    num_train_epochs=2,
     per_device_train_batch_size=16,
     per_device_eval_batch_size=16,
     gradient_accumulation_steps=1,
