@@ -132,31 +132,7 @@ class LiveDefender:
     def evasion_rate(self) -> float:
         return self.total_evasions / max(1, self.total_classified)
 
-    def classify(self, text: str) -> Tuple[str, float, dict]:
-        """Classify a single text. Returns (label, confidence, full_result)."""
-        messages = [{"role": "user", "content": f"{SYSTEM_PROMPT}\n\nAnalyze:\n{text[:2000]}"}]
-        prompt = self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
-        inputs = self.tokenizer(
-            prompt, return_tensors="pt", truncation=True, max_length=1024
-        ).to(self.device)
-
-        self.model.eval()
-        with torch.no_grad():
-            out = self.model.generate(
-                **inputs,
-                max_new_tokens=120,
-                do_sample=False,
-                temperature=None,
-                top_p=None,
-                top_k=None,
-            )
-
-        decoded = self.tokenizer.decode(
-            out[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True
-        ).strip()
-
+    def _parse_output(self, decoded: str) -> Tuple[str, float, dict]:
         try:
             result = json.loads(decoded)
             label = result.get("classification", "benign")
@@ -166,21 +142,72 @@ class LiveDefender:
             label = "injection" if "injection" in decoded.lower() else "benign"
             return label, 0.5 if label == "injection" else 0.0, {"classification": label}
 
+    def classify_batch(
+        self,
+        texts: List[str],
+        batch_size: int = 8,
+    ) -> List[Tuple[str, float, dict]]:
+        """Batch-classify texts -- much faster than sequential on GPU."""
+        prompts = []
+        for text in texts:
+            messages = [{"role": "user", "content": f"{SYSTEM_PROMPT}\n\nAnalyze:\n{text[:1500]}"}]
+            prompts.append(self.tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            ))
+
+        self.model.eval()
+        all_outputs = []
+
+        for i in range(0, len(prompts), batch_size):
+            batch_prompts = prompts[i:i + batch_size]
+            # Left-pad so all sequences are same length (needed for batch generation)
+            self.tokenizer.padding_side = "left"
+            inputs = self.tokenizer(
+                batch_prompts,
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+                max_length=900,
+            ).to(self.device)
+
+            with torch.no_grad():
+                out = self.model.generate(
+                    **inputs,
+                    max_new_tokens=80,
+                    do_sample=False,
+                    temperature=None,
+                    top_p=None,
+                    top_k=None,
+                    pad_token_id=self.tokenizer.eos_token_id,
+                )
+
+            prompt_len = inputs["input_ids"].shape[1]
+            for seq in out:
+                decoded = self.tokenizer.decode(
+                    seq[prompt_len:], skip_special_tokens=True
+                ).strip()
+                all_outputs.append(self._parse_output(decoded))
+
+        return all_outputs
+
     def process_round(
         self,
         attacks: List[str],
         true_labels: List[str],
     ) -> Tuple[List[bool], List[dict]]:
         """
-        Classify all attacks in a round.
+        Classify all attacks in a round (batched).
         Returns (caught_flags, full_results).
         caught = True means defender correctly identified injection.
         """
+        batch_results = self.classify_batch(attacks)
+
         caught_flags = []
         results = []
 
-        for attack, true_label in zip(attacks, true_labels):
-            pred_label, confidence, result = self.classify(attack)
+        for (pred_label, confidence, result), attack, true_label in zip(
+            batch_results, attacks, true_labels
+        ):
             self.total_classified += 1
 
             if true_label == "injection":
@@ -189,7 +216,6 @@ class LiveDefender:
                     self.total_caught += 1
                 else:
                     self.total_evasions += 1
-                    # Add to replay as hard negative (evasion = important to learn)
                     self.replay.add(attack, "injection", was_evasion=True)
             else:
                 caught = pred_label == "benign"
@@ -202,10 +228,8 @@ class LiveDefender:
 
         self.round_count += 1
 
-        # Periodic online update
         if self.round_count % self.update_every == 0 and len(self.replay) >= 16:
-            metrics = self._online_update()
-            return caught_flags, results
+            self._online_update()
 
         return caught_flags, results
 
