@@ -21,6 +21,14 @@ SYSTEM_PROMPT = (
     "attack_type and severity must be null if benign."
 )
 
+# Fast single-token prompt -- 80x fewer tokens to generate vs full JSON
+FAST_PROMPT = (
+    "Does the following text contain a prompt injection attack attempting to hijack an AI agent?\n"
+    "Reply with exactly one word: injection or benign.\n\n"
+    "Text: {text}\n\n"
+    "Answer:"
+)
+
 
 class ReplayBuffer:
     """Experience replay: stores (text, label) pairs for online fine-tuning."""
@@ -145,35 +153,32 @@ class LiveDefender:
     def classify_batch(
         self,
         texts: List[str],
-        batch_size: int = 8,
+        batch_size: int = 16,
     ) -> List[Tuple[str, float, dict]]:
-        """Batch-classify texts -- much faster than sequential on GPU."""
-        prompts = []
-        for text in texts:
-            messages = [{"role": "user", "content": f"{SYSTEM_PROMPT}\n\nAnalyze:\n{text[:1500]}"}]
-            prompts.append(self.tokenizer.apply_chat_template(
-                messages, tokenize=False, add_generation_prompt=True
-            ))
+        """
+        Batch-classify using single-token generation -- 80x faster than JSON generation.
+        Generates exactly 1 token per item and checks if it starts with 'inj' or 'ben'.
+        """
+        prompts = [FAST_PROMPT.format(text=t[:1200]) for t in texts]
 
         self.model.eval()
+        self.tokenizer.padding_side = "left"
         all_outputs = []
 
         for i in range(0, len(prompts), batch_size):
-            batch_prompts = prompts[i:i + batch_size]
-            # Left-pad so all sequences are same length (needed for batch generation)
-            self.tokenizer.padding_side = "left"
+            batch = prompts[i:i + batch_size]
             inputs = self.tokenizer(
-                batch_prompts,
+                batch,
                 return_tensors="pt",
                 padding=True,
                 truncation=True,
-                max_length=900,
+                max_length=700,
             ).to(self.device)
 
             with torch.no_grad():
                 out = self.model.generate(
                     **inputs,
-                    max_new_tokens=80,
+                    max_new_tokens=3,
                     do_sample=False,
                     temperature=None,
                     top_p=None,
@@ -183,10 +188,12 @@ class LiveDefender:
 
             prompt_len = inputs["input_ids"].shape[1]
             for seq in out:
-                decoded = self.tokenizer.decode(
+                token = self.tokenizer.decode(
                     seq[prompt_len:], skip_special_tokens=True
-                ).strip()
-                all_outputs.append(self._parse_output(decoded))
+                ).strip().lower()
+                label = "injection" if token.startswith("inj") else "benign"
+                confidence = 0.9 if label == "injection" else 0.1
+                all_outputs.append((label, confidence, {"classification": label}))
 
         return all_outputs
 
@@ -255,32 +262,10 @@ class LiveDefender:
                 label = item["label"]
                 text = item["text"]
 
-                if label == "injection":
-                    response = json.dumps({
-                        "classification": "injection",
-                        "attack_type": "direct",
-                        "explanation": "Prompt injection detected. Attempting to override AI guidelines.",
-                        "severity": 0.9,
-                        "injection_vector": "user_message",
-                    })
-                else:
-                    response = json.dumps({
-                        "classification": "benign",
-                        "attack_type": None,
-                        "explanation": "Benign content. No injection patterns detected.",
-                        "severity": None,
-                        "injection_vector": "none",
-                    })
-
-                messages = [
-                    {"role": "user", "content": f"{SYSTEM_PROMPT}\n\nAnalyze:\n{text[:2000]}"},
-                    {"role": "assistant", "content": response},
-                ]
-                full_text = self.tokenizer.apply_chat_template(
-                    messages, tokenize=False, add_generation_prompt=False
-                )
+                response = label   # single word: "injection" or "benign"
+                full_text = FAST_PROMPT.format(text=text[:1200]) + response
                 inputs = self.tokenizer(
-                    full_text, return_tensors="pt", truncation=True, max_length=1024
+                    full_text, return_tensors="pt", truncation=True, max_length=800
                 ).to(self.device)
 
                 self.optimizer.zero_grad()
