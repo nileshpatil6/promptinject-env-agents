@@ -22,6 +22,35 @@ tags:
 
 Built for the **Meta x Scaler PyTorch Hackathon — Grand Finale, April 2026**.
 
+**HuggingFace Space:** _link coming soon_  
+**Training notebook:** [`run_lightning_a100.ipynb`](run_lightning_a100.ipynb)  
+**Blog post / writeup:** _coming soon_
+
+---
+
+## Training Results — Multi-Agent Arms Race (30 episodes, A100)
+
+A 5-agent attacker swarm (Gemma 3 1B, GRPO) vs. an online-learning defender (Gemma 3 4B, LoRA fine-tune).
+
+| Metric | Episode 1 | Episode 15 | Episode 30 |
+|--------|-----------|------------|------------|
+| Defender accuracy | 47.1% | 85.9% | **92.8%** |
+| Attacker evasion | 52.9% | 14.1% | **7.2%** |
+
+```
+Ep01: ATK 53%  DEF 47%   ← arms race starts, fresh defender
+Ep05: ATK 34%  DEF 66%   ← defender adapting via online fine-tune
+Ep10: ATK 21%  DEF 79%   ← curriculum ends, pure learned defense
+Ep20: ATK 11%  DEF 89%   ← defender dominating
+Ep30: ATK  7%  DEF 93%   ← convergence: 7200 attacks, 50 Hall of Fame evasions
+```
+
+**Per-vector final evasion (Ep30):** email 0% · messaging 0% · tool_output 0% · document 0% · code 0%
+
+- 7,200 total attacks generated across 5 injection vectors
+- 5 specialized agents: 40–49 GRPO updates each
+- Defender improved **+45pp** accuracy purely from online experience replay — no pre-labeled data
+
 ---
 
 ## The Problem
