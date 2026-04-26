@@ -24,7 +24,7 @@ Built for the **Meta x Scaler PyTorch Hackathon — Grand Finale, April 2026**.
 
 **HuggingFace Space:** [Mr66/promptinject-env](https://huggingface.co/spaces/Mr66/promptinject-env)  
 **Training notebook:** [`run_lightning_a100.ipynb`](run_lightning_a100.ipynb)  
-**Blog post / writeup:** _coming soon_
+**Blog post / writeup:** [`Blog.md`](Blog.md)
 
 ---
 
