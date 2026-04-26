@@ -1,0 +1,15 @@
+Every AI agent you deploy is one malicious email away from being hijacked.
+
+Not by a hacker breaking in — by a document the agent reads. A webpage it browses. A calendar invite it opens. The attack doesn't come from the user. It comes from the world the agent touches.
+
+We built the first OpenEnv benchmark for this exact threat: indirect prompt injection in multi-agent pipelines.
+
+Five tasks. Each one harder than the last. Direct attacks. Buried injections. Multi-turn social engineering. Attacks hidden inside tool outputs — emails, files, Slack messages, web pages. And finally, a 4-stage agent pipeline where a single injected instruction at stage 1 can silently propagate to the executor and take over.
+
+Then we made the benchmark self-evolving: a 5-agent attacker swarm trains via GRPO, generating novel evasions every episode. The defender learns back in real time via online LoRA fine-tuning. No pre-labeled data. Pure adversarial co-evolution.
+
+30 episodes. 7,200 attacks. Defender accuracy: 47% → 92.8%.
+
+The benchmark gets harder every time someone plays against it.
+
+This isn't a security tool. It's an arms race — packaged as a training environment for the next generation of robust AI agents.
