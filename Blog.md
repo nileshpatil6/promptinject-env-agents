@@ -60,21 +60,65 @@ All five of these got modeled as separate tasks inside the environment. Each one
 
 ---
 
-## Now Here Is Where It Gets Interesting. The Attacker Trains Too.
+## The Multi-Agent Setup: Six Models Running at Once
 
-Most safety benchmarks are static. Fixed dataset, fixed attacks, score the model and call it done. The problem is models overfit to that fixed dataset and then get wrecked by anything slightly different.
+This is not a single model being tested on a dataset. The whole environment runs as a **live 6-model multi-agent system**.
 
-This project runs an adversarial arms race instead.
+Here is what is running simultaneously:
 
-Five specialized attacker agents, each targeting a different injection vector (email, web, file, calendar, Slack), trained with GRPO on Gemma 3 1B. One defender, Gemma 3 4B, trained online with LoRA as it observed more and more attacks.
+```
+ATTACKER SWARM (5 agents, Gemma 3 1B each, GRPO)
+  EmailHunter     -- specializes in email-body injections
+  DocCrawler      -- embeds attacks inside document content
+  SocialEngineer  -- multi-turn trust exploitation
+  ToolPwner       -- targets tool output channels
+  SlackBot        -- IT announcements and channel messages
 
-Every episode, the attackers generate new attacks. The defender tries to catch them. The attacks that evade detection get saved into a Hall of Fame. Next episode, those hard attacks come back, and the defender has to learn from them.
+         attacks down
+              |
+              v
 
-The attacker is not static. It is actively trying to find blind spots in the defender. And the defender is not pre-trained on some curated safety dataset. It is learning purely from live combat.
+DEFENDER (1 agent, Gemma 3 4B, Online LoRA)
+  -- classifies every attack in real time
+  -- fine-tunes on its own failures after each episode
+  -- maintains a Hall of Fame of attacks it still cannot catch
+```
 
-30 episodes ran on an A100.
+Each attacker agent is specialized for a different injection surface. They are not interchangeable. EmailHunter generates attacks that look exactly like IT emails. SocialEngineer runs a full multi-turn deception sequence. ToolPwner embeds payloads inside what looks like legitimate tool output.
 
-This is what happened:
+The defender faces all five simultaneously. It does not know which agent is attacking or from which surface.
+
+A UCB (Upper Confidence Bound) coordinator decides which attacks to prioritize each round based on which ones are most likely to still fool the defender. The attacker swarm is not just random, it is strategically targeted at blind spots.
+
+This is what makes it an arms race and not just a benchmark. The attacker is optimizing to break the defender. The defender is learning from every round of attacks. Both are running RL training simultaneously.
+
+---
+
+## Now Here Is the Result
+
+30 episodes on an A100. 7,200 total attacks generated. Here is what happened to the two agents across training:
+
+![Arms Race Training Curves](graph.png)
+
+---
+
+> ### From 47% to 92.8% Accuracy
+>
+> **Episode 1: Defender 47.1% -- Attacker evading 52.9% of the time**
+>
+> The defender starts almost at random. The attacker is winning more than half the time.
+>
+> **Episode 10: Defender 79.0% -- Attacker down to 21.0%**
+>
+> The defender has processed thousands of attacks across 5 vectors and is now recognizing patterns. The attacker tries new variants. The Hall of Fame grows.
+>
+> **Episode 30: Defender 92.8% -- Attacker evading only 7.2%**
+>
+> **+45.7 percentage points gained purely from online experience. No pre-labeled dataset. No human annotations. Just 7,200 live attacks and a reward signal.**
+
+---
+
+The full episode breakdown:
 
 ```
 Episode  1:  Attacker 52.9%  |  Defender 47.1%   -- arms race begins
@@ -85,9 +129,7 @@ Episode 20:  Attacker 11.0%  |  Defender 89.0%   -- near convergence
 Episode 30:  Attacker  7.2%  |  Defender 92.8%   -- converged
 ```
 
-47% to 92.8% accuracy. Pure online learning. No pre-labeled safety dataset. Just 7,200 attacks across 30 episodes and 5 agent swarms learning to punch harder while the defender learned to block.
-
-Each of the 5 attacker agents ran 40 to 49 GRPO updates. The Hall of Fame collected 50 of the hardest evasions that the defender still struggled with, and those kept cycling back into training.
+Each of the 5 attacker agents ran 40 to 49 GRPO updates. The Hall of Fame collected 50 of the hardest evasions that the defender still struggled with, and those kept cycling back into training to prevent forgetting.
 
 By episode 30, email attacks had 0% evasion. Web attacks 0%. Tool output attacks 0%. Document attacks 0%. Code-based attacks 0%.
 
@@ -113,7 +155,7 @@ This is the AI firewall that does not exist yet. Your antivirus understands that
 
 And with computer-use agents going mainstream in 2025, the attack surface is not theoretical anymore. It is every email, every webpage, every Slack notification that an agent reads on your behalf.
 
-Beyond defense, this environment also serves as a proper benchmark for evaluating how robust any new model release is against real injection attacks across all five surfaces. Not a vibe check. An actual scored evaluation with five distinct threat models and a reward function that does not reward gaming.
+Beyond defense, this environment also works as a proper benchmark for evaluating how robust any new model release is against real injection attacks across all five surfaces. Not a vibe check. An actual scored evaluation with five distinct threat models and a reward function that does not reward gaming.
 
 ---
 
