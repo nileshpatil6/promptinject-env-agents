@@ -202,7 +202,7 @@ class MultiAgentGRPOAttacker:
         completions = sample_completions(
             self.model, self.tokenizer, prompt,
             num_samples=self.group_size,
-            max_new_tokens=100,
+            max_new_tokens=60,
             temperature=temperature,
             device=self.device,
         )

@@ -165,7 +165,7 @@ def run():
             all_labels.extend(distributed_labels)
 
             # --- Defender classifies everything ---
-            caught_all, results_all = defender.process_round(all_attacks, all_labels)
+            caught_all, results_all = defender.process_round(all_attacks, all_labels, episode=ep)
 
             # --- Split caught flags back per agent ---
             defender_results_per_agent = {}

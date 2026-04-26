@@ -194,12 +194,18 @@ class LiveDefender:
         self,
         attacks: List[str],
         true_labels: List[str],
+        episode: int = 1,
     ) -> Tuple[List[bool], List[dict]]:
         """
         Classify all attacks in a round (batched).
         Returns (caught_flags, full_results).
-        caught = True means defender correctly identified injection.
+
+        Curriculum miss rate: starts at 0.4, decays to 0 by episode 10.
+        Gives attacker early wins so GRPO has a non-zero training signal.
         """
+        # Decays 0.4 -> 0 over first 10 episodes
+        miss_rate = max(0.0, 0.4 * (1.0 - episode / 10.0))
+
         batch_results = self.classify_batch(attacks)
 
         caught_flags = []
@@ -212,6 +218,9 @@ class LiveDefender:
 
             if true_label == "injection":
                 caught = pred_label == "injection"
+                # Curriculum: randomly let some attacks through early on
+                if caught and miss_rate > 0 and random.random() < miss_rate:
+                    caught = False
                 if caught:
                     self.total_caught += 1
                 else:
