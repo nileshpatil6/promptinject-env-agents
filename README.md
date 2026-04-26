@@ -51,6 +51,8 @@ Ep30: ATK  7%  DEF 93%   ← convergence: 7200 attacks, 50 Hall of Fame evasions
 - 5 specialized agents: 40–49 GRPO updates each
 - Defender improved **+45pp** accuracy purely from online experience replay — no pre-labeled data
 
+![Arms Race Training Curves](graph.png)
+
 ---
 
 ## The Problem
