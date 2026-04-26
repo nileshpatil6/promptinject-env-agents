@@ -9,3 +9,11 @@ dist/
 build/
 shieldgemma-adapter/
 shieldgemma-adapter.zip
+*.zip
+*.pdf
+"image copy*.png"
+.claude/
+arena/checkpoints_multi/
+arena/__pycache__/
+.pytest_cache/
+noteBookoutput.pdf
