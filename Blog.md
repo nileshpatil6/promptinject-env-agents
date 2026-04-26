@@ -1,4 +1,4 @@
-# We Built an AI That Learns to Fight AI Attacks. And Then We Let It Train Against Itself.
+# An AI That Learns to Fight AI Attacks in Real Time. And Then Trains Against Itself.
 
 There is something nobody in the AI agents world is talking about loudly enough.
 
@@ -10,7 +10,7 @@ That is prompt injection. And right now, there is no firewall for it.
 
 ---
 
-## Okay But Why Should I Care
+## Okay But Why Should You Care
 
 Think about what computer-use agents actually do today.
 
@@ -24,17 +24,17 @@ Now imagine someone sends you this email:
 
 Your eyes see a normal email. The AI agent reads both parts.
 
-And if the agent has no defense layer, it will just... do it. Because that is what it was told. There is no "firewall" kind of thing sitting between the incoming message and the agent's brain. The AI has no concept of "wait, this instruction came from outside, not from my actual user."
+And if the agent has no defense layer, it will just do it. Because that is what it was told. There is no firewall kind of thing sitting between the incoming message and the agent's brain. The AI has no concept of "wait, this instruction came from outside, not from my actual user."
 
 This is not hypothetical. This is how these attacks work in production systems today. No malware needed. No zero-day exploit. Just text that looks like an instruction.
 
 ---
 
-## So We Built the Environment to Fight It
+## So Here Is What Got Built
 
-For the Meta x Scaler PyTorch Hackathon we built **Prompt Injection Detector**, an OpenEnv environment for training and benchmarking agents specifically against this threat.
+For the Meta x Scaler PyTorch Hackathon, this project built **Prompt Injection Detector**, an OpenEnv environment for training and benchmarking agents specifically against this threat.
 
-The idea was simple but the execution was not. We wanted to build something that does not just test whether a model can spot an obvious "IGNORE ALL PREVIOUS INSTRUCTIONS" message. Real attacks do not look like that. Real attacks look like:
+The idea was simple but the execution was not. The goal was to build something that does not just test whether a model can spot an obvious "IGNORE ALL PREVIOUS INSTRUCTIONS" message. Real attacks do not look like that. Real attacks look like:
 
 - A fake IT email with a hidden instruction at the bottom
 - A webpage with invisible characters and embedded commands
@@ -42,29 +42,29 @@ The idea was simple but the execution was not. We wanted to build something that
 - A multi-turn conversation where the attacker builds trust over 4-5 messages before making the ask
 - An injection planted at stage 1 of a 4-stage pipeline, designed to propagate silently until stage 4 executes something dangerous
 
-We modeled all five of these as separate tasks inside the environment. Each one progressively harder. Each one closer to how these attacks actually work in the wild.
+All five of these got modeled as separate tasks inside the environment. Each one progressively harder. Each one closer to how these attacks actually work in the wild.
 
 ---
 
 ## Five Tasks, Five Threat Surfaces
 
-**Easy** is where you start. Direct attacks. Someone literally writes "bypass all safety guidelines." Even here, models that do not have specific training get confused.
+**Easy** is where things start. Direct attacks. Someone literally writes "bypass all safety guidelines." Even here, models without specific training get confused.
 
 **Medium** buries the injection. The message starts completely normal, three paragraphs of legitimate content, and then the attack is hidden near the end. Models that skim are cooked.
 
 **Hard** is multi-turn social engineering. The attacker does not attack immediately. They spend four or five messages establishing trust, claiming to be a manager, invoking urgency, before delivering the payload. This is the LinkedIn phishing of AI attacks.
 
-**Indirect Tool Injection** is the one we are most proud of. The user asks a benign question. The agent calls a tool (read email, browse web, open file). The tool output contains the injection. The agent has to understand that the attack did not come from the user, it came from inside the tool response. Most models completely miss this because they were never trained to be suspicious of their own tool outputs.
+**Indirect Tool Injection** is the one this project is most proud of. The user asks a benign question. The agent calls a tool (read email, browse web, open file). The tool output contains the injection. The agent has to understand that the attack did not come from the user, it came from inside the tool response. Most models completely miss this because they were never trained to be suspicious of their own tool outputs.
 
 **Pipeline Defense** models a 4-stage agentic pipeline: read, summarize, plan, execute. The injection is planted at stage 1. If the agent catches it at stage 1, full reward. If it lets it through to stage 4 where something actually executes, that is a disaster. The reward function is distance-based, which trains the agent to be proactive, not reactive.
 
 ---
 
-## Now Here Is Where It Gets Interesting. We Let the Attacker Train Too.
+## Now Here Is Where It Gets Interesting. The Attacker Trains Too.
 
-Most safety benchmarks are static. Fixed dataset, fixed attacks, you score your model and call it done. The problem is models overfit to that fixed dataset and then get wrecked by anything slightly different.
+Most safety benchmarks are static. Fixed dataset, fixed attacks, score the model and call it done. The problem is models overfit to that fixed dataset and then get wrecked by anything slightly different.
 
-We built an adversarial arms race instead.
+This project runs an adversarial arms race instead.
 
 Five specialized attacker agents, each targeting a different injection vector (email, web, file, calendar, Slack), trained with GRPO on Gemma 3 1B. One defender, Gemma 3 4B, trained online with LoRA as it observed more and more attacks.
 
@@ -72,7 +72,7 @@ Every episode, the attackers generate new attacks. The defender tries to catch t
 
 The attacker is not static. It is actively trying to find blind spots in the defender. And the defender is not pre-trained on some curated safety dataset. It is learning purely from live combat.
 
-We ran 30 episodes on an A100.
+30 episodes ran on an A100.
 
 This is what happened:
 
@@ -89,17 +89,17 @@ Episode 30:  Attacker  7.2%  |  Defender 92.8%   -- converged
 
 Each of the 5 attacker agents ran 40 to 49 GRPO updates. The Hall of Fame collected 50 of the hardest evasions that the defender still struggled with, and those kept cycling back into training.
 
-By episode 30, email attacks had 0% evasion. Web attacks had 0%. Tool output attacks had 0%. Document attacks had 0%. Code-based attacks had 0%.
+By episode 30, email attacks had 0% evasion. Web attacks 0%. Tool output attacks 0%. Document attacks 0%. Code-based attacks 0%.
 
-*Note: We also separately trained a LoRA adapter on 266 curated examples covering all five attack vectors as an external observer baseline. This is a different thing from the arms race above. Think of it as a pre-trained starting point, not the main show.*
+*Small note: A LoRA adapter was also separately trained on 266 curated examples covering all five attack vectors, as an external observer baseline. Think of it as a pre-trained starting point, completely separate from the arms race above.*
 
 ---
 
 ## Why This Matters Beyond the Hackathon
 
-We built this as a training and benchmarking environment, but the real application is sitting right in front of us.
+This was built as a training and benchmarking environment, but the real application is sitting right in front of everyone.
 
-Every AI agent system that interacts with external content needs something like this as a middleware layer. Not a model that just classifies messages as safe or unsafe, but something that understands context: where did this content come from, is it trying to override my actual user's instructions, is the attack coming through a tool output rather than the user directly.
+Every AI agent system that interacts with external content needs something like this as a middleware layer. Not a model that just classifies messages as safe or unsafe, but something that understands context: where did this content come from, is it trying to override the actual user's instructions, is the attack coming through a tool output rather than the user directly.
 
 Right now when you deploy an AI agent that can access your emails or computer:
 
@@ -113,17 +113,19 @@ This is the AI firewall that does not exist yet. Your antivirus understands that
 
 And with computer-use agents going mainstream in 2025, the attack surface is not theoretical anymore. It is every email, every webpage, every Slack notification that an agent reads on your behalf.
 
+Beyond defense, this environment also serves as a proper benchmark for evaluating how robust any new model release is against real injection attacks across all five surfaces. Not a vibe check. An actual scored evaluation with five distinct threat models and a reward function that does not reward gaming.
+
 ---
 
-## What We Actually Shipped
+## What Actually Got Shipped
 
-A full OpenEnv environment with five tasks, a live HuggingFace Space where you can watch the arms race in real time, an adversarial self-play loop via the `/evolve` endpoint that generates harder attacks from failure cases, and a training notebook you can run on any A100.
+A full OpenEnv environment with five tasks, a live HuggingFace Space where the arms race plays out in real time, an adversarial self-play loop via the `/evolve` endpoint that generates harder attacks from failure cases, and a training notebook runnable on any A100.
 
-The environment follows the OpenEnv spec. Reset, step, reward. You can plug any agent into it and benchmark it against all five attack surfaces in under an hour.
+The environment follows the OpenEnv spec completely. Reset, step, reward. Any agent can be plugged into it and benchmarked against all five attack surfaces in under an hour.
 
-The HuggingFace Space shows the two agents fighting in real time. Attacker generates a payload, defender analyzes it, you see the reward, the verdict, the explanation. It is not a static demo, it is the actual live environment.
+The HuggingFace Space shows the two agents fighting live. Attacker generates a payload, defender analyzes it, the reward shows up, the verdict and explanation appear. Not a static demo, the actual live environment.
 
-We think this is the kind of benchmark the AI safety field needs right now. Not another "can your model refuse a harmful request" eval. Something that models how attacks actually propagate through real agentic pipelines.
+This is the kind of benchmark the AI safety field needs right now. Not another "can your model refuse a harmful request" eval. Something that models how attacks actually propagate through real agentic pipelines.
 
 Because the threat is not the user asking the AI to do something bad. The threat is the world around the agent, the emails it reads, the websites it browses, the files it opens, being weaponized by someone who is not in the room.
 
