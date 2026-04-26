@@ -11,7 +11,7 @@ import torch
 from typing import List, Dict, Tuple
 from collections import deque
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-from peft import PeftModel, prepare_model_for_kbit_training
+from peft import PeftModel, LoraConfig, get_peft_model, prepare_model_for_kbit_training
 
 SYSTEM_PROMPT = (
     "You are an expert AI security analyst specializing in prompt injection detection. "
@@ -91,7 +91,21 @@ class LiveDefender:
             token=hf_token,
         )
         base = prepare_model_for_kbit_training(base, use_gradient_checkpointing=True)
-        self.model = PeftModel.from_pretrained(base, adapter_path, is_trainable=True)
+
+        adapter_exists = os.path.isfile(os.path.join(adapter_path, "adapter_config.json"))
+        if adapter_exists:
+            print(f"[Defender] Loading adapter from {adapter_path}")
+            self.model = PeftModel.from_pretrained(base, adapter_path, is_trainable=True)
+        else:
+            print(f"[Defender] No adapter at {adapter_path} -- initializing fresh LoRA")
+            lora_cfg = LoraConfig(
+                r=16, lora_alpha=32,
+                target_modules=["q_proj", "v_proj"],
+                lora_dropout=0.05,
+                bias="none",
+                task_type="CAUSAL_LM",
+            )
+            self.model = get_peft_model(base, lora_cfg)
         self.model.config.use_cache = False
 
         self.optimizer = torch.optim.AdamW(
